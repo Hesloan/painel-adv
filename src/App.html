@@ -433,16 +433,20 @@ function vInicio() {
 
   // ---- faixa dos próximos meses
   const startKey = monthKey(t);
-  const months = Array.from({ length: 12 }, (_, i) => monthKey(addMonths(t.slice(0, 8) + '01', i)));
+  const PASSADOS = 3;
+  const months = Array.from({ length: 12 + PASSADOS }, (_, i) => monthKey(addMonths(t.slice(0, 8) + '01', i - PASSADOS)));
+  const pagas = T('parcelas').filter(p => p.status === 'paga' && parcelaAtiva(p));
+  const recebidoMes = k => sum(pagas.filter(p => monthKey(p.data_pagamento || p.vencimento) === k), p => p.valor);
   const cols = [];
   const late = sum(atrasadas, p => p.valor);
-  if (late > 0) cols.push({ key: 'late', label: '<b>Atrasado</b>', late, fix: 0, est: 0 });
   months.forEach((k, i) => {
-    const ps = pend.filter(p => monthKey(p.vencimento) === k && !(p.vencimento < t));
+    const ps = k < startKey ? [] : pend.filter(p => monthKey(p.vencimento) === k && !(p.vencimento < t));
     const y = k.slice(0, 4), m = +k.slice(5, 7);
+    if (k === startKey && late > 0) cols.push({ key: 'late', label: '<b>Atrasado</b>', late, fix: 0, est: 0, ok: 0 });
     cols.push({
-      key: k, now: k === startKey,
-      label: (i === 0 || m === 1) ? `${MES3[m - 1]} <b>${y.slice(2)}</b>` : MES3[m - 1],
+      key: k, now: k === startKey, past: k < startKey,
+      label: (i === 0 || m === 1 || k === startKey) ? `${MES3[m - 1]} <b>${y.slice(2)}</b>` : MES3[m - 1],
+      ok: k <= startKey ? recebidoMes(k) : 0,
       fix: sum(ps.filter(p => p.tipo !== 'estimada'), p => p.valor),
       est: sum(ps.filter(p => p.tipo === 'estimada'), p => p.valor),
       late: 0
@@ -450,22 +454,26 @@ function vInicio() {
   });
   const lastKey = months[months.length - 1];
   const depois = pend.filter(p => !p.vencimento || monthKey(p.vencimento) > lastKey);
-  if (depois.length) cols.push({ key: 'depois', label: 'Depois', fix: sum(depois.filter(p => p.tipo !== 'estimada'), p => p.valor), est: sum(depois.filter(p => p.tipo === 'estimada'), p => p.valor), late: 0 });
-  const max = Math.max(1, ...cols.map(c => c.fix + c.est + c.late));
+  if (depois.length) cols.push({ key: 'depois', label: 'Depois', fix: sum(depois.filter(p => p.tipo !== 'estimada'), p => p.valor), est: sum(depois.filter(p => p.tipo === 'estimada'), p => p.valor), late: 0, ok: 0 });
+  const max = Math.max(1, ...cols.map(c => c.fix + c.est + c.late + c.ok));
+  const recebidoAgora = recebidoMes(startKey);
+  const nRecebidoAgora = pagas.filter(p => monthKey(p.data_pagamento || p.vencimento) === startKey).length;
   const totalPend = sum(pend, p => p.valor);
   const temEst = pend.some(p => p.tipo === 'estimada');
   const nContr = new Set(pend.map(p => p.contrato_id).filter(Boolean)).size;
   const nAvulsos = pend.filter(p => !p.contrato_id).length;
 
   const ribbon = cols.map(c => {
-    const tot = c.fix + c.est + c.late;
+    const tot = c.fix + c.est + c.late + c.ok;
     const h = v => (v / max * 100).toFixed(1) + '%';
-    return `<button type="button" class="month${c.now ? ' now' : ''}" data-action="rec-month" data-key="${c.key}" title="${c.key.length === 7 ? esc(monthLabel(c.key)) : ''}: ${brl(tot)}">
+    const titulo = (c.key.length === 7 ? monthLabel(c.key) : c.key === 'late' ? 'Atrasado' : 'Depois') + ': ' + [c.ok ? 'recebido ' + brl(c.ok) : '', c.fix + c.est + c.late ? 'a receber ' + brl(c.fix + c.est + c.late) : ''].filter(Boolean).join(', ');
+    return `<button type="button" class="month${c.now ? ' now' : ''}${c.past ? ' past' : ''}" data-action="rec-month" data-key="${c.key}" data-modo="${c.past ? 'pagas' : c.now ? 'todas' : 'pendentes'}" title="${esc(titulo)}">
       <span class="amt${tot ? '' : ' zero'}">${tot ? brlShort(tot) : '—'}</span>
       <span class="bars">
         ${c.est ? `<span class="bar-est" style="height:${h(c.est)}"></span>` : ''}
         ${c.fix ? `<span class="bar-fix" style="height:${h(c.fix)}"></span>` : ''}
         ${c.late ? `<span class="bar-late" style="height:${h(c.late)}"></span>` : ''}
+        ${c.ok ? `<span class="bar-ok" style="height:${h(c.ok)}"></span>` : ''}
       </span>
       <span class="lbl">${c.label}</span>
     </button>`;
@@ -473,20 +481,28 @@ function vInicio() {
 
   const hero = `<section class="hero" aria-labelledby="h-receber">
     <div class="hero-top">
-      <div>
+      <div class="hero-figs">
+       <div>
+        <h2 class="muted" style="font-family:var(--font-body);font-size:.95rem;font-weight:500">Recebido em ${MESES[+startKey.slice(5) - 1]}</h2>
+        <div class="hero-total num hero-ok">${brl(recebidoAgora)}</div>
+        <p class="hero-sub">${nRecebidoAgora ? plural(nRecebidoAgora, 'pagamento', 'pagamentos') + ' neste mês' : 'Nenhum pagamento neste mês ainda'}</p>
+       </div>
+       <div>
         <h2 id="h-receber" class="muted" style="font-family:var(--font-body);font-size:.95rem;font-weight:500">Total a receber</h2>
         <div class="hero-total num">${brl(totalPend)}</div>
         <p class="hero-sub">${totalPend
           ? `De ${nContr ? plural(nContr, 'processo', 'processos') : ''}${nContr && nAvulsos ? ' e ' : ''}${nAvulsos ? plural(nAvulsos, 'recebimento avulso', 'recebimentos avulsos') : ''}. Toque em um mês para ver quem paga.${temEst ? ' A parte listrada depende de um evento, como o nascimento do bebê, e a data é uma previsão.' : ''}`
           : 'Quando você cadastrar um processo, as parcelas aparecem aqui, mês a mês.'}</p>
+       </div>
       </div>
       <div class="legend">
+        <span><i class="lg-ok"></i>Recebido</span>
         <span><i class="lg-fix"></i>Data combinada</span>
         <span><i class="lg-est"></i>Data prevista</span>
         ${late ? '<span><i class="lg-late"></i>Atrasado</span>' : ''}
       </div>
     </div>
-    ${totalPend ? `<div class="ribbon">${ribbon}</div>` : `<div class="empty" style="padding:28px 0 8px"><button class="btn btn-primary" type="button" data-action="new" data-what="contrato">${ic('plus')}Cadastrar processo</button></div>`}
+    ${totalPend || pagas.length ? `<div class="ribbon">${ribbon}</div>` : `<div class="empty" style="padding:28px 0 8px"><button class="btn btn-primary" type="button" data-action="new" data-what="contrato">${ic('plus')}Cadastrar processo</button></div>`}
   </section>`;
 
   // ---- indicadores do período
@@ -504,7 +520,7 @@ function vInicio() {
       <div class="kpi"><p>Investido</p><strong>${brl(investido)}</strong><span>${plural(gastos.length, 'gasto', 'gastos')}</span></div>
       <div class="kpi"><p>Processos fechados</p><strong>${contr.length}</strong><span>${contr.length ? 'ticket médio ' + brl(contratado / contr.length) : 'nenhum no período'}</span></div>
       <div class="kpi"><p>Valor contratado</p><strong>${brl(contratado)}</strong><span>soma dos contratos</span></div>
-      <div class="kpi"><p>Recebido</p><strong>${brl(recebido)}</strong><span>parcelas pagas no período</span></div>
+      <div class="kpi"><p>Recebido</p><strong>${brl(recebido)}</strong><span>parcelas e avulsos pagos</span></div>
       <div class="kpi"><p>Custo por processo</p><strong>${contr.length ? brl(custo) : '—'}</strong><span>investido ÷ processos</span></div>
     </div>`;
 
@@ -1623,7 +1639,7 @@ const ACTIONS = {
   'periodo': el => { S.periodo = el.dataset.v; rerender(); },
   'cli-status': el => { S.clienteStatus = el.dataset.v; rerender(); },
   'rec-modo': el => { S.rec.modo = el.dataset.v; rerender(); },
-  'rec-month': el => { S.rec.mes = el.dataset.key; if (el.dataset.key) S.rec.modo = 'pendentes'; go('recebiveis'); },
+  'rec-month': el => { S.rec.mes = el.dataset.key; if (el.dataset.key) S.rec.modo = el.dataset.modo || 'pendentes'; go('recebiveis'); },
   'gasto-cat': el => { S.gasto.cat = el.dataset.v; rerender(); },
   'gasto-periodo': el => { S.gasto.periodo = el.dataset.v; rerender(); },
   'toggle-paga': el => togglePaga(el.dataset.id),
