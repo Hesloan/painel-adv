@@ -27,7 +27,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Configurar acesso
         env:
@@ -42,7 +42,17 @@ jobs:
           printf '{"scriptId":"%s","rootDir":"src"}' "$SCRIPT_ID" > .clasp.json
 
       - name: Enviar código
-        run: npx --yes @google/clasp@2.4.2 push --force
+        run: |
+          # O clasp 2.x termina com sucesso mesmo quando o envio falha, então conferimos a saída.
+          npx --yes @google/clasp@2.4.2 push --force 2>&1 | tee push.log
+          if grep -q "Push failed" push.log; then
+            if grep -q "insufficient_scope" push.log; then
+              echo "::error::O login do clasp não deu permissão para editar projetos do Apps Script. Refaça o login marcando TODAS as permissões e atualize o secret CLASPRC_JSON."
+            else
+              echo "::error::O envio para o Apps Script falhou. Veja o log acima."
+            fi
+            exit 1
+          fi
 
       - name: Atualizar implantação /exec (opcional)
         env:
