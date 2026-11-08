@@ -78,36 +78,66 @@ function fileToItem_(f, isFolder) {
   };
 }
 
-/** Lista o conteúdo da pasta (subpastas primeiro, depois arquivos mais recentes). */
+function listItems_(folder) {
+  const items = [];
+  const folders = folder.getFolders();
+  while (folders.hasNext()) {
+    const sub = folders.next();
+    if (!sub.isTrashed()) items.push(fileToItem_(sub, true));
+  }
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const f = files.next();
+    if (!f.isTrashed()) items.push(fileToItem_(f, false));
+  }
+  items.sort((a, b) => (a.isFolder === b.isFolder ? (a.updated < b.updated ? 1 : -1) : (a.isFolder ? -1 : 1)));
+  return items;
+}
+
+/** Só permite abrir/enviar em pastas que estão dentro da pasta-mãe dos clientes. */
+function folderInsideRoot_(folderId) {
+  const rootId = driveRoot_().getId();
+  const folder = DriveApp.getFolderById(folderId);
+  let level = [folder];
+  for (let depth = 0; depth < 8 && level.length; depth++) {
+    const next = [];
+    for (const f of level) {
+      if (f.getId() === rootId) return folder;
+      const ps = f.getParents();
+      while (ps.hasNext()) next.push(ps.next());
+    }
+    level = next;
+  }
+  // Pastas vinculadas manualmente a um cliente/processo também valem, mesmo fora da pasta-mãe.
+  const linked = Repo.all('clientes').some(c => c.drive_folder_id === folderId) || Repo.all('contratos').some(c => c.drive_folder_id === folderId);
+  if (linked) return folder;
+  throw new Error('Esta pasta está fora da pasta de clientes do painel.');
+}
+
+/** Lista o conteúdo da pasta do cliente ou do processo (subpastas primeiro, depois arquivos recentes). */
 function api_listFiles(kind, id) {
   return withLock_(() => {
     const r = ensureFolder_(kind, id);
-    const items = [];
-    const folders = r.folder.getFolders();
-    while (folders.hasNext()) {
-      const sub = folders.next();
-      if (!sub.isTrashed()) items.push(fileToItem_(sub, true));
-    }
-    const files = r.folder.getFiles();
-    while (files.hasNext()) {
-      const f = files.next();
-      if (!f.isTrashed()) items.push(fileToItem_(f, false));
-    }
-    items.sort((a, b) => (a.isFolder === b.isFolder ? (a.updated < b.updated ? 1 : -1) : (a.isFolder ? -1 : 1)));
     return {
       folder: { id: r.folder.getId(), url: r.folder.getUrl(), name: r.folder.getName() },
       record: r.record,
-      items: items
+      items: listItems_(r.folder)
     };
   });
 }
 
-/** Recebe um arquivo (base64) e salva na pasta do cliente ou do processo. */
-function api_upload(kind, id, file) {
+/** Lista uma subpasta qualquer (navegação dentro das pastas no painel). */
+function api_listFolder(folderId) {
+  const folder = folderInsideRoot_(folderId);
+  return { folder: { id: folder.getId(), url: folder.getUrl(), name: folder.getName() }, items: listItems_(folder) };
+}
+
+/** Recebe um arquivo (base64) e salva na pasta do cliente/processo, ou numa subpasta dela. */
+function api_upload(kind, id, file, folderId) {
   if (!file || !file.data || !file.name) throw new Error('Arquivo inválido.');
-  const r = withLock_(() => ensureFolder_(kind, id));
+  const folder = folderId ? folderInsideRoot_(folderId) : withLock_(() => ensureFolder_(kind, id)).folder;
   const blob = Utilities.newBlob(Utilities.base64Decode(file.data), file.mime || 'application/octet-stream', file.name);
-  const created = r.folder.createFile(blob);
+  const created = folder.createFile(blob);
   return fileToItem_(created, false);
 }
 

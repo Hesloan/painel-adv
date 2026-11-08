@@ -10,13 +10,15 @@
  * Instalação: veja o guia INSTALACAO.md.
  */
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 
 const DEFAULT_CONFIG = {
   categorias_gasto: ['Anúncios', 'Mentoria', 'Curso', 'Software / assinatura', 'Projeto / freelancer', 'Material / escritório', 'Impostos e taxas', 'Outro'],
   origens: ['Meta Ads (Instagram/Facebook)', 'Google Ads', 'Instagram orgânico', 'Site / Google orgânico', 'Indicação', 'Cliente antigo', 'Outro'],
   areas: ['Família', 'Patrimonial', 'Previdenciário', 'Outro'],
-  plataformas: ['Meta Ads', 'Google Ads', 'Orgânico', 'Indicação', 'Outro']
+  plataformas: ['Meta Ads', 'Google Ads', 'Orgânico', 'Indicação', 'Outro'],
+  tipos_prazo: ['Prazo processual', 'Audiência', 'Reunião', 'Tarefa', 'Lembrete'],
+  categorias_receita: ['Consulta', 'Parecer', 'Honorários avulsos', 'Outro']
 };
 
 const DEFAULT_PRODUTOS = [
@@ -40,7 +42,7 @@ const DEFAULT_CAMPANHAS = [
 ];
 
 /** Tabelas que as telas podem gravar diretamente. */
-const WRITABLE = ['clientes', 'produtos', 'contratos', 'parcelas', 'gastos', 'campanhas'];
+const WRITABLE = ['clientes', 'produtos', 'contratos', 'parcelas', 'gastos', 'campanhas', 'prazos'];
 
 // ===========================================================================
 // Publicação
@@ -163,10 +165,14 @@ function api_save(table, record) {
   });
 }
 
-/** Salva um contrato com todas as parcelas dele numa única operação. */
+/** Salva um processo (contrato) com todas as parcelas dele numa única operação.
+ *  Na primeira vez, cria a pasta do processo dentro da pasta do cliente no Drive. */
 function api_saveContrato(contrato, parcelas) {
   return withLock_(() => {
-    const saved = Repo.upsert('contratos', contrato);
+    let saved = Repo.upsert('contratos', contrato);
+    if (!validFolder_(saved.drive_folder_id)) {
+      try { saved = ensureFolder_('processo', saved.id).record.data; } catch (e) { /* segue; a pasta é criada ao abrir os documentos */ }
+    }
     const keep = {};
     (parcelas || []).forEach(p => { if (p.id) keep[p.id] = true; });
     // Remove parcelas que saíram do contrato
@@ -182,16 +188,22 @@ function api_saveContrato(contrato, parcelas) {
 function api_delete(table, id) {
   if (WRITABLE.indexOf(table) < 0) throw new Error('Tabela não permitida: ' + table);
   return withLock_(() => {
-    const removed = { contratos: [], parcelas: [] };
+    const removed = { contratos: [], parcelas: [], prazos: [] };
     if (table === 'clientes') {
       Repo.all('contratos').filter(c => c.cliente_id === id).forEach(c => {
         removed.parcelas = removed.parcelas.concat(Repo.removeWhere('parcelas', 'contrato_id', c.id));
         Repo.remove('contratos', c.id);
         removed.contratos.push(c.id);
       });
+      removed.prazos = Repo.removeWhere('prazos', 'cliente_id', id);
+      // Recebimentos avulsos do cliente continuam existindo, só perdem o vínculo (guardam o nome).
+      const cli = Repo.get('clientes', id) || {};
+      Repo.all('parcelas').filter(p => !p.contrato_id && p.cliente_id === id)
+        .forEach(p => { p.pessoa = p.pessoa || cli.nome || ''; p.cliente_id = ''; Repo.upsert('parcelas', p); });
     }
     if (table === 'contratos') {
       removed.parcelas = Repo.removeWhere('parcelas', 'contrato_id', id);
+      removed.prazos = Repo.removeWhere('prazos', 'contrato_id', id);
     }
     Repo.remove(table, id);
     // Obs.: a pasta do cliente no Drive NUNCA é apagada pelo painel.

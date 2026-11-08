@@ -36,6 +36,10 @@ const P = {
   refresh: '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
   drive: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  left: '<path d="M15 5l-7 7 7 7"/>',
+  right: '<path d="M9 5l7 7-7 7"/>',
+  coin: '<circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.5c-.5-1-1.4-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1.2 0-2.1-.5-2.6-1.5M12 6.5v1.5M12 16v1.5"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'
 };
 const ic = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`;
@@ -43,7 +47,8 @@ const ic = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 // ---------------------------------------------------------------- estado ---
 const S = {
   ready: false,
-  tables: { clientes: [], produtos: [], contratos: [], parcelas: [], gastos: [], campanhas: [] },
+  tables: { clientes: [], produtos: [], contratos: [], parcelas: [], gastos: [], campanhas: [], prazos: [] },
+  agenda: { mes: '', dia: '' },
   config: {}, meta: {},
   route: 'inicio',
   periodo: '12m',
@@ -60,6 +65,7 @@ const S = {
 
 const ROUTES = [
   { id: 'inicio', label: 'Visão geral', short: 'Início', icon: 'home' },
+  { id: 'agenda', label: 'Agenda e prazos', short: 'Agenda', icon: 'clock' },
   { id: 'clientes', label: 'Clientes', icon: 'users' },
   { id: 'contratos', label: 'Processos', icon: 'file' },
   { id: 'recebiveis', label: 'Recebíveis', short: 'Receber', icon: 'cal' },
@@ -68,7 +74,7 @@ const ROUTES = [
   { id: 'produtos', label: 'Produtos e serviços', short: 'Produtos', icon: 'tag' },
   { id: 'ajustes', label: 'Ajustes', icon: 'gear' }
 ];
-const TABS = ['inicio', 'clientes', 'recebiveis', 'gastos'];
+const TABS = ['inicio', 'agenda', 'clientes', 'recebiveis'];
 const SUBPAGES = { cliente: 'clientes', processo: 'clientes' };
 
 // ------------------------------------------------------------- utilidades ---
@@ -136,7 +142,7 @@ const campanhaNome = id => (byId('campanhas', id) || {}).nome || '';
 const parcelasDe = contratoId => T('parcelas').filter(p => p.contrato_id === contratoId).sort((a, b) => (a.numero || 0) - (b.numero || 0));
 const contratosDe = clienteId => T('contratos').filter(c => c.cliente_id === clienteId).sort((a, b) => (b.data_fechamento || '').localeCompare(a.data_fechamento || ''));
 const contratoValido = c => c && c.status !== 'cancelado';
-const parcelaAtiva = p => contratoValido(byId('contratos', p.contrato_id));
+const parcelaAtiva = p => !p.contrato_id || contratoValido(byId('contratos', p.contrato_id));
 
 function statusParcela(p) {
   if (p.status === 'paga') return 'paga';
@@ -155,7 +161,7 @@ function badgeParcela(p) {
   return `<span class="badge ${map[s][0]}">${map[s][1]}</span>`;
 }
 const pendentes = () => T('parcelas').filter(p => p.status !== 'paga' && parcelaAtiva(p));
-const aReceberCliente = id => sum(contratosDe(id).filter(contratoValido).flatMap(c => parcelasDe(c.id)).filter(p => p.status !== 'paga'), p => p.valor);
+const aReceberCliente = id => sum(contratosDe(id).filter(contratoValido).flatMap(c => parcelasDe(c.id)).concat(T('parcelas').filter(p => !p.contrato_id && p.cliente_id === id)).filter(p => p.status !== 'paga'), p => p.valor);
 
 const PERIODOS = [['mes', 'Este mês'], ['3m', '3 meses'], ['12m', '12 meses'], ['ano', 'Este ano'], ['tudo', 'Tudo']];
 function rangeOf(p) {
@@ -194,11 +200,12 @@ function save(t, rec) {
     return saved;
   });
 }
-function saveContrato(c, parcelas) {
+function saveContrato(c, parcelas, waitFor) {
   upsertLocal('contratos', c);
   S.tables.parcelas = T('parcelas').filter(p => p.contrato_id !== c.id).concat(parcelas);
   rerender();
-  return track(call('api_saveContrato', c, parcelas)).then(r => {
+  // Se o cliente/serviço acabou de ser criado, espera ele chegar ao servidor (a pasta do processo fica dentro da do cliente).
+  return track(Promise.resolve(waitFor).then(() => call('api_saveContrato', c, parcelas))).then(r => {
     if (r) {
       upsertLocal('contratos', r.contrato);
       S.tables.parcelas = T('parcelas').filter(p => p.contrato_id !== c.id).concat(r.parcelas);
@@ -213,7 +220,8 @@ function remove(t, id) {
     S.tables.parcelas = T('parcelas').filter(p => cids.indexOf(p.contrato_id) < 0);
     S.tables.contratos = T('contratos').filter(c => c.cliente_id !== id);
   }
-  if (t === 'contratos') S.tables.parcelas = T('parcelas').filter(p => p.contrato_id !== id);
+  if (t === 'clientes') S.tables.prazos = T('prazos').filter(z => z.cliente_id !== id);
+  if (t === 'contratos') { S.tables.parcelas = T('parcelas').filter(p => p.contrato_id !== id); S.tables.prazos = T('prazos').filter(z => z.contrato_id !== id); }
   S.tables[t] = T(t).filter(r => r.id !== id);
   rerender();
   return track(call('api_delete', t, id));
@@ -259,7 +267,7 @@ function renderChrome() {
 function rerender() {
   if (!S.ready) return;
   renderChrome();
-  const views = { cliente: vCliente, processo: vProcesso, inicio: vInicio, clientes: vClientes, contratos: vContratos, recebiveis: vRecebiveis, gastos: vGastos, campanhas: vCampanhas, produtos: vProdutos, ajustes: vAjustes };
+  const views = { agenda: vAgenda, cliente: vCliente, processo: vProcesso, inicio: vInicio, clientes: vClientes, contratos: vContratos, recebiveis: vRecebiveis, gastos: vGastos, campanhas: vCampanhas, produtos: vProdutos, ajustes: vAjustes };
   $('#view').innerHTML = views[S.route]();
   if (S.drawer && S.drawer.live) paintDrawer();
 }
@@ -446,7 +454,8 @@ function vInicio() {
   const max = Math.max(1, ...cols.map(c => c.fix + c.est + c.late));
   const totalPend = sum(pend, p => p.valor);
   const temEst = pend.some(p => p.tipo === 'estimada');
-  const nContr = new Set(pend.map(p => p.contrato_id)).size;
+  const nContr = new Set(pend.map(p => p.contrato_id).filter(Boolean)).size;
+  const nAvulsos = pend.filter(p => !p.contrato_id).length;
 
   const ribbon = cols.map(c => {
     const tot = c.fix + c.est + c.late;
@@ -468,7 +477,7 @@ function vInicio() {
         <h2 id="h-receber" class="muted" style="font-family:var(--font-body);font-size:.95rem;font-weight:500">Total a receber</h2>
         <div class="hero-total num">${brl(totalPend)}</div>
         <p class="hero-sub">${totalPend
-          ? `De ${plural(nContr, 'processo', 'processos')}. Toque em um mês para ver quem paga.${temEst ? ' A parte listrada depende de um evento, como o nascimento do bebê, e a data é uma previsão.' : ''}`
+          ? `De ${nContr ? plural(nContr, 'processo', 'processos') : ''}${nContr && nAvulsos ? ' e ' : ''}${nAvulsos ? plural(nAvulsos, 'recebimento avulso', 'recebimentos avulsos') : ''}. Toque em um mês para ver quem paga.${temEst ? ' A parte listrada depende de um evento, como o nascimento do bebê, e a data é uma previsão.' : ''}`
           : 'Quando você cadastrar um processo, as parcelas aparecem aqui, mês a mês.'}</p>
       </div>
       <div class="legend">
@@ -535,9 +544,21 @@ function vInicio() {
 
   const alert = atrasadas.length ? `<div class="alert" style="margin-bottom:20px"><div class="grow"><b>${plural(atrasadas.length, 'parcela atrasada', 'parcelas atrasadas')}</b>, somando ${brl(late)}.</div><button class="btn btn-sm" type="button" data-action="rec-month" data-key="late">Ver quais</button></div>` : '';
 
-  return `${alert}${hero}${kpis}
-    <div class="grid g-wide" style="margin-top:20px">${proxPanel}${catPanel}</div>
-    <div class="grid g-wide" style="margin-top:20px">${campPanel}${prodPanel}</div>`;
+  // ---- agenda
+  const przPend = T('prazos').filter(z => z.status !== 'feito');
+  const przAtras = przPend.filter(z => z.data < t).sort(ordPrazo);
+  const przSemana = przPend.filter(z => z.data >= t && z.data <= addDays(t, 7)).sort(ordPrazo);
+  const agendaPanel = `<section class="panel">
+    <div class="panel-head"><h3>Agenda da semana</h3><button class="btn-text btn" type="button" data-action="go" data-route="agenda">Ver agenda</button></div>
+    ${przAtras.length || przSemana.length ? `<div class="list">${przAtras.concat(przSemana).slice(0, 7).map(z => linhaPrazo(z)).join('')}</div>`
+      : `<div class="empty" style="padding:24px 0"><p>Nada marcado para os próximos 7 dias.</p><button class="btn btn-ghost btn-sm" type="button" data-action="new" data-what="prazo">${ic('plus')}Adicionar prazo</button></div>`}
+  </section>`;
+  const alertPrazos = przAtras.length ? `<div class="alert" style="margin-bottom:20px"><div class="grow"><b>${plural(przAtras.length, 'prazo atrasado', 'prazos atrasados')}</b> na agenda.</div><button class="btn btn-sm" type="button" data-action="go" data-route="agenda">Ver agenda</button></div>` : '';
+
+  return `${alertPrazos}${alert}${hero}${kpis}
+    <div class="grid g2" style="margin-top:20px">${agendaPanel}${proxPanel}</div>
+    <div class="grid g2" style="margin-top:20px">${catPanel}${prodPanel}</div>
+    <div style="margin-top:20px">${campPanel}</div>`;
 }
 
 function statsCampanha(c) {
@@ -548,19 +569,168 @@ function statsCampanha(c) {
 }
 
 function linhaParcela(p, compact) {
-  const c = byId('contratos', p.contrato_id) || {};
-  const total = parcelasDe(p.contrato_id).length;
+  const avulsa = !p.contrato_id;
+  const c = avulsa ? {} : (byId('contratos', p.contrato_id) || {});
+  const total = avulsa ? 1 : parcelasDe(p.contrato_id).length;
   const paga = p.status === 'paga';
-  const sub = [produtoNome(c.produto_id), total > 1 ? `parcela ${p.numero} de ${total}` : '', p.condicao].filter(Boolean).join(', ');
+  const nome = avulsa ? (p.cliente_id ? clienteNome(p.cliente_id) : (p.pessoa || 'Recebimento avulso')) : clienteNome(c.cliente_id);
+  const sub = avulsa
+    ? [p.categoria || 'Avulso', p.descricao].filter(Boolean).join(', ')
+    : [produtoNome(c.produto_id), total > 1 ? `parcela ${p.numero} de ${total}` : '', p.condicao].filter(Boolean).join(', ');
+  const open = avulsa ? `data-action="edit" data-what="receita" data-id="${p.id}"` : `data-action="open-processo" data-id="${p.contrato_id}"`;
   return `<div class="item static">
-    <div class="grow" data-action="open-processo" data-id="${p.contrato_id}" style="cursor:pointer">
-      <div class="t">${esc(clienteNome(c.cliente_id))}</div>
+    <div class="grow" ${open} style="cursor:pointer">
+      <div class="t">${esc(nome)}${avulsa ? ' <span class="badge b-mute">Avulso</span>' : ''}</div>
       <div class="s">${esc(sub)}</div>
     </div>
     <div class="v"><b>${brl(p.valor)}</b><div class="small ${statusParcela(p) === 'atrasada' ? 'late-date' : 'muted'}">${paga && p.data_pagamento ? 'em ' + fmtDate(p.data_pagamento) : ({ atrasada: 'venceu ', estimada: 'previsto ' }[statusParcela(p)] || '') + fmtDate(p.vencimento)}</div></div>
     ${compact ? '' : badgeParcela(p)}
     <button class="icon-btn" type="button" data-action="toggle-paga" data-id="${p.id}" aria-label="${paga ? 'Desmarcar recebimento' : 'Marcar como recebida'}" title="${paga ? 'Desmarcar recebimento' : 'Marcar como recebida'}" style="${paga ? 'background:var(--ok-soft);color:var(--ok);border-color:transparent' : ''}">${ic('check')}</button>
   </div>`;
+}
+
+/* =========================================================================
+   AGENDA E PRAZOS
+   ========================================================================= */
+const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+const addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
+const dayLabel = iso => { const [y, m, d] = iso.split('-').map(Number); const w = DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]; return `${w[0].toUpperCase()}${w.slice(1)}, ${d} de ${MESES[m - 1]}`; };
+function statusPrazo(z) {
+  if (z.status === 'feito') return 'feito';
+  if (z.data < today()) return 'atrasado';
+  if (z.data === today()) return 'hoje';
+  return 'pendente';
+}
+const ordPrazo = (a, b) => ((a.status === 'feito') - (b.status === 'feito')) || (a.data || '').localeCompare(b.data || '') || (a.hora || '99').localeCompare(b.hora || '99');
+function prazoCtx(z) {
+  const k = z.contrato_id ? byId('contratos', z.contrato_id) : null;
+  return [z.cliente_id ? clienteNome(z.cliente_id) : '', k ? produtoNome(k.produto_id) : ''].filter(Boolean).join(', ') || 'Avulso';
+}
+function linhaPrazo(z, o = {}) {
+  const st = statusPrazo(z), feito = st === 'feito';
+  return `<div class="item static prazo-item ${st}">
+    <button class="check${feito ? ' on' : ''}" type="button" data-action="toggle-prazo" data-id="${z.id}" aria-label="${feito ? 'Marcar como pendente' : 'Marcar como feito'}" title="${feito ? 'Marcar como pendente' : 'Marcar como feito'}">${feito ? ic('check') : ''}</button>
+    <div class="grow" data-action="edit" data-what="prazo" data-id="${z.id}" style="cursor:pointer">
+      <div class="t">${esc(z.titulo)}</div>
+      <div class="s">${esc([z.tipo, o.semCtx ? '' : prazoCtx(z)].filter(Boolean).join(', '))}</div>
+    </div>
+    <div class="v small">${o.semData ? '' : `<div class="${st === 'atrasado' ? 'late-date' : ''}">${st === 'hoje' ? 'Hoje' : fmtDate(z.data)}</div>`}${z.hora ? `<div class="muted">${esc(z.hora)}</div>` : ''}</div>
+    ${st === 'atrasado' ? '<span class="badge b-late">Atrasado</span>' : st === 'hoje' && !o.semData ? '<span class="badge b-est">Hoje</span>' : ''}
+  </div>`;
+}
+function painelPrazos(list, opts) {
+  const pend = list.filter(z => z.status !== 'feito').sort(ordPrazo);
+  const feitos = list.filter(z => z.status === 'feito').sort((a, b) => (b.data || '').localeCompare(a.data || '')).slice(0, 3);
+  return `<section class="panel">
+    <div class="panel-head"><h3>${opts.title}</h3><button class="btn btn-ghost btn-sm" type="button" data-action="new" data-what="prazo" data-cliente="${opts.cliente || ''}" data-processo="${opts.processo || ''}">${ic('plus')}Adicionar</button></div>
+    ${pend.length || feitos.length ? `<div class="list">${pend.concat(feitos).map(z => linhaPrazo(z, { semCtx: opts.semCtx })).join('')}</div>` : `<p class="muted small">${opts.vazio}</p>`}
+  </section>`;
+}
+
+function vAgenda() {
+  const t = today();
+  if (!S.agenda.mes) S.agenda.mes = t.slice(0, 7);
+  if (!S.agenda.dia) S.agenda.dia = t;
+  const mes = S.agenda.mes, dia = S.agenda.dia;
+  const [y, m] = mes.split('-').map(Number);
+  const startDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  let cells = Array.from({ length: 42 }, (_, i) => addDays(`${mes}-01`, i - startDow));
+  if (cells.slice(35).every(d => d.slice(0, 7) !== mes)) cells = cells.slice(0, 35);
+  const byDay = {};
+  T('prazos').forEach(z => { (byDay[z.data] = byDay[z.data] || []).push(z); });
+  Object.values(byDay).forEach(l => l.sort(ordPrazo));
+  const venc = {};
+  pendentes().forEach(p => { if (p.vencimento) venc[p.vencimento] = (venc[p.vencimento] || 0) + (p.valor || 0); });
+
+  const cal = `<section class="panel cal-panel">
+    <div class="cal-head">
+      <button class="icon-btn" type="button" data-action="cal-mes" data-n="-1" aria-label="Mês anterior">${ic('left')}</button>
+      <h2>${esc(monthLabel(mes))}</h2>
+      <button class="icon-btn" type="button" data-action="cal-mes" data-n="1" aria-label="Próximo mês">${ic('right')}</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="cal-hoje">Hoje</button>
+      <span class="grow"></span>
+      <button class="btn btn-primary btn-sm" type="button" data-action="new" data-what="prazo" data-data="${dia}">${ic('plus')}Novo prazo</button>
+    </div>
+    <div class="cal" role="grid" aria-label="${esc(monthLabel(mes))}">
+      ${DIAS.map(d => `<div class="cal-dow" role="columnheader">${d.slice(0, 3)}</div>`).join('')}
+      ${cells.map(d => {
+        const items = byDay[d] || [];
+        const cls = ['cal-day', d.slice(0, 7) !== mes ? 'out' : '', d === t ? 'today' : '', d === dia ? 'sel' : ''].filter(Boolean).join(' ');
+        return `<button type="button" class="${cls}" data-action="cal-dia" data-d="${d}" aria-label="${esc(dayLabel(d))}${items.length ? ', ' + plural(items.length, 'item', 'itens') : ''}">
+          <span class="n">${+d.slice(8)}</span>${venc[d] ? `<span class="cal-money" title="A receber: ${brl(venc[d])}">${ic('coin')}</span>` : ''}
+          ${items.slice(0, 3).map(z => `<span class="cal-item ${statusPrazo(z)}">${z.hora ? esc(z.hora) + ' ' : ''}${esc(z.titulo)}</span>`).join('')}
+          ${items.length > 3 ? `<span class="cal-more">+${items.length - 3}</span>` : ''}
+        </button>`;
+      }).join('')}
+    </div>
+  </section>`;
+
+  const doDia = (byDay[dia] || []);
+  const recDia = pendentes().filter(p => p.vencimento === dia);
+  const pend = T('prazos').filter(z => z.status !== 'feito');
+  const atras = pend.filter(z => z.data < t).sort(ordPrazo);
+  const prox = pend.filter(z => z.data > t && z.data <= addDays(t, 14)).sort(ordPrazo);
+  const side = `<div class="stack">
+    <section class="panel">
+      <div class="panel-head"><h3>${esc(dayLabel(dia))}</h3><button class="btn btn-ghost btn-sm" type="button" data-action="new" data-what="prazo" data-data="${dia}">${ic('plus')}Adicionar</button></div>
+      ${doDia.length ? `<div class="list">${doDia.map(z => linhaPrazo(z, { semData: true })).join('')}</div>` : '<p class="muted small">Nada marcado para este dia.</p>'}
+      ${recDia.length ? `<p class="small muted" style="margin-top:12px">${ic('coin').replace('<svg ', '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" ')}A receber neste dia: <b>${brl(sum(recDia, p => p.valor))}</b></p>` : ''}
+    </section>
+    ${atras.length ? `<section class="panel"><div class="panel-head"><h3>Atrasados</h3><p>${atras.length}</p></div><div class="list">${atras.map(z => linhaPrazo(z)).join('')}</div></section>` : ''}
+    <section class="panel"><div class="panel-head"><h3>Próximos 14 dias</h3></div>
+      ${prox.length ? `<div class="list">${prox.map(z => linhaPrazo(z)).join('')}</div>` : '<p class="muted small">Nada nos próximos 14 dias.</p>'}</section>
+  </div>`;
+  return `<div class="grid g-cal">${cal}${side}</div>`;
+}
+
+function formPrazo(id, pre = {}) {
+  const z = id ? byId('prazos', id) : {
+    data: pre.data || today(), tipo: (S.config.tipos_prazo || [])[0], status: 'pendente',
+    cliente_id: pre.cliente || '', contrato_id: pre.processo || ''
+  };
+  const cliOpts = [['', 'Avulso (sem cliente)']].concat(T('clientes').slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => [c.id, c.nome]));
+  const procOpts = cid => [['', cid ? 'Nenhum processo específico' : 'Escolha um cliente primeiro']].concat(cid ? contratosDe(cid).map(k => [k.id, produtoNome(k.produto_id) + (k.numero_processo ? ' (' + k.numero_processo + ')' : '')]) : []);
+  openDrawer(() => ({
+    title: id ? 'Editar prazo' : 'Novo prazo ou tarefa',
+    sub: id ? '' : 'Aparece na agenda e na página do processo.',
+    body: `<form class="form" id="fm" autocomplete="off">
+      ${field('titulo', 'O que precisa ser feito', 'text', z.titulo, { full: true, required: true, autofocus: true, placeholder: 'Ex.: Protocolar contestação' })}
+      ${field('data', 'Data', 'date', z.data)}
+      ${field('hora', 'Horário (opcional)', 'time', z.hora)}
+      ${field('tipo', 'Tipo', 'select', z.tipo, { options: optList('tipos_prazo'), full: true })}
+      ${field('cliente_id', 'Cliente', 'select', z.cliente_id, { options: cliOpts })}
+      ${field('contrato_id', 'Processo', 'select', z.contrato_id, { options: procOpts(z.cliente_id) })}
+      ${id ? `<div class="field full"><label>Situação</label>${seg('status', z.status === 'feito' ? 'feito' : 'pendente', [['pendente', 'Pendente'], ['feito', 'Feito']])}</div>` : ''}
+      ${field('observacoes', 'Observações', 'textarea', z.observacoes, { full: true })}
+    </form>`,
+    foot: `${id ? `<button class="btn btn-danger" type="button" data-action="del" data-what="prazo" data-id="${id}">Excluir</button>` : ''}<span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-action="close">Cancelar</button>
+      <button class="btn btn-primary" type="button" data-action="submit-prazo" data-id="${id || ''}">${id ? 'Salvar alterações' : 'Adicionar à agenda'}</button>`,
+    mount: root => {
+      const fm = $('#fm', root);
+      fm.cliente_id.onchange = () => {
+        fm.contrato_id.innerHTML = procOpts(fm.cliente_id.value).map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
+      };
+    }
+  }));
+}
+function submitPrazo(id) {
+  const fm = $('#fm'), v = readForm(fm);
+  if (!v.titulo) return invalid(fm.titulo, 'Descreva o que precisa ser feito.');
+  if (!v.data) return invalid(fm.data, 'Informe a data.');
+  const base = id ? byId('prazos', id) : { id: uid(), status: 'pendente' };
+  const status = v.status || base.status || 'pendente';
+  save('prazos', Object.assign({}, base, v, { status, concluido_em: status === 'feito' ? (base.concluido_em || today()) : '' }));
+  toast(id ? 'Prazo atualizado.' : 'Adicionado à agenda.');
+  closeDrawer();
+  if (S.route === 'agenda') { S.agenda.dia = v.data; S.agenda.mes = v.data.slice(0, 7); rerender(); }
+}
+function togglePrazo(id) {
+  const z = byId('prazos', id);
+  if (!z) return;
+  const feito = z.status === 'feito';
+  save('prazos', Object.assign({}, z, { status: feito ? 'pendente' : 'feito', concluido_em: feito ? '' : today() }));
+  toast(feito ? 'Marcado como pendente.' : 'Feito.');
 }
 
 /* =========================================================================
@@ -652,6 +822,7 @@ function vCliente() {
           ${info.length ? `<table class="table"><tbody>${info.map(([k, v]) => `<tr><td class="muted" style="width:38%">${k}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">Sem dados de contato. Use Editar para completar.</p>'}
           ${c.observacoes ? `<p class="small" style="margin-top:12px;white-space:pre-wrap">${esc(c.observacoes)}</p>` : ''}
         </section>
+        ${painelPrazos(T('prazos').filter(z => z.cliente_id === c.id), { title: 'Prazos e avisos', cliente: c.id, vazio: 'Nenhum prazo para este cliente.' })}
         <section class="panel">${painelDocs('cliente', c.id, c.drive_folder_id, 'Documentos do cliente', 'Documentos pessoais (RG, CPF, comprovantes). Cada processo tem uma subpasta própria aqui dentro.')}</section>
       </div>
     </div>`;
@@ -708,11 +879,14 @@ function vProcesso() {
         </section>
         <section class="panel">${painelDocs('processo', k.id, k.drive_folder_id, 'Documentos do processo', 'Subpasta deste processo, dentro da pasta do cliente no Drive.')}</section>
       </div>
-      <section class="panel">
-        <div class="panel-head"><h3>Dados do processo</h3></div>
-        <table class="table"><tbody>${dados.map(([a, b]) => `<tr><td class="muted" style="width:42%">${a}</td><td>${b ? esc(b) : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table>
-        ${k.observacoes ? `<p class="small" style="margin-top:12px;white-space:pre-wrap">${esc(k.observacoes)}</p>` : ''}
-      </section>
+      <div class="stack">
+        ${painelPrazos(T('prazos').filter(z => z.contrato_id === k.id), { title: 'Prazos e avisos', cliente: k.cliente_id, processo: k.id, semCtx: true, vazio: 'Nenhum prazo ou aviso para este processo.' })}
+        <section class="panel">
+          <div class="panel-head"><h3>Dados do processo</h3></div>
+          <table class="table"><tbody>${dados.map(([a, b]) => `<tr><td class="muted" style="width:42%">${a}</td><td>${b ? esc(b) : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table>
+          ${k.observacoes ? `<p class="small" style="margin-top:12px;white-space:pre-wrap">${esc(k.observacoes)}</p>` : ''}
+        </section>
+      </div>
     </div>`;
 }
 
@@ -730,36 +904,48 @@ const EXT = (f) => {
 const fkey = (kind, id) => kind + ':' + id;
 function painelDocs(kind, id, folderId, title, help) {
   const st = S.files[fkey(kind, id)] || {};
-  const folderUrl = st.folder ? st.folder.url : (folderId ? 'https://drive.google.com/drive/folders/' + folderId : '');
+  const nav = st.nav || [];
+  const cur = nav.length ? nav[nav.length - 1] : null;
+  const src = cur || st;
+  const folderUrl = cur ? (cur.url || 'https://drive.google.com/drive/folders/' + cur.id) : st.folder ? st.folder.url : (folderId ? 'https://drive.google.com/drive/folders/' + folderId : '');
   let list;
-  if (st.loading && !st.items) list = '<div class="progress"><i></i></div><p class="small muted" style="margin-top:8px">Lendo a pasta no Drive…</p>';
-  else if (st.error) list = `<p class="small" style="color:var(--color-primary)">${esc(st.error)}</p>`;
-  else if (st.items && !st.items.length) list = '<p class="small muted">A pasta está vazia. Envie documentos abaixo ou direto pelo Google Drive.</p>';
-  else if (st.items) list = `<div class="files">${st.items.map(f => {
+  if (src.loading && !src.items) list = '<div class="progress"><i></i></div><p class="small muted" style="margin-top:8px">Lendo a pasta no Drive…</p>';
+  else if (src.error) list = `<p class="small" style="color:var(--color-primary)">${esc(src.error)}</p>`;
+  else if (src.items && !src.items.length) list = '<p class="small muted">A pasta está vazia. Envie documentos abaixo ou direto pelo Google Drive.</p>';
+  else if (src.items) list = `<div class="files">${src.items.map(f => {
     const [cls, lab] = EXT(f);
-    const proc = f.isFolder ? T('contratos').find(k => k.drive_folder_id === f.id) : null;
-    const meta = f.isFolder ? (proc ? 'Pasta do processo' : 'Pasta') : [fmtSize(f.size), 'alterado em ' + fmtDate(f.updated.slice(0, 10))].filter(Boolean).join(', ');
-    const attrs = proc ? `href="#" data-action="open-processo" data-id="${proc.id}"` : `href="${esc(f.url)}" target="_blank" rel="noopener"`;
+    const proc = f.isFolder && kind === 'cliente' && !cur ? T('contratos').find(k => k.drive_folder_id === f.id) : null;
+    const meta = f.isFolder ? (proc ? 'Pasta do processo' : 'Pasta, toque para abrir') : [fmtSize(f.size), 'alterado em ' + fmtDate(f.updated.slice(0, 10))].filter(Boolean).join(', ');
+    const attrs = proc ? `href="#" data-action="open-processo" data-id="${proc.id}"`
+      : f.isFolder ? `href="#" data-action="folder-open" data-kind="${kind}" data-id="${id}" data-folder="${esc(f.id)}" data-name="${esc(f.name)}"`
+      : `href="${esc(f.url)}" target="_blank" rel="noopener"`;
     return `<a class="file" ${attrs}><span class="ext ${cls}">${f.isFolder ? ic('drive') : esc(lab)}</span><span class="grow"><span class="t" style="display:block">${esc(f.name)}</span><span class="s">${meta}</span></span></a>`;
   }).join('')}</div>`;
   else list = '';
+  const trail = nav.length ? `<nav class="crumbs small" style="margin-bottom:8px" aria-label="Pastas">
+      <button type="button" data-action="folder-up" data-kind="${kind}" data-id="${id}" data-i="0">${ic('left').replace('<svg ', '<svg style="width:12px;height:12px;vertical-align:-1px" ')} ${esc(kind === 'cliente' ? 'Pasta do cliente' : 'Pasta do processo')}</button>
+      ${nav.map((n, i) => i < nav.length - 1 ? `<span aria-hidden="true">/</span><button type="button" data-action="folder-up" data-kind="${kind}" data-id="${id}" data-i="${i + 1}">${esc(n.name)}</button>` : `<span aria-hidden="true">/</span><span aria-current="page">${esc(n.name)}</span>`).join('')}
+    </nav>` : '';
   return `<div class="panel-head" style="margin-bottom:6px"><h3>${title}</h3>
       <span class="row" style="gap:6px">
         <button class="icon-btn" type="button" data-action="files-refresh" data-kind="${kind}" data-id="${id}" aria-label="Atualizar lista do Drive" title="Atualizar">${ic('refresh')}</button>
         ${folderUrl ? `<a class="btn btn-ghost btn-sm" href="${esc(folderUrl)}" target="_blank" rel="noopener">${ic('drive')}Abrir no Drive</a>` : ''}
       </span></div>
-    ${help ? `<p class="small muted" style="margin-bottom:12px">${help}</p>` : ''}
-    ${st.loading && st.items ? '<div class="progress" style="margin-bottom:8px"><i></i></div>' : ''}
+    ${help && !nav.length ? `<p class="small muted" style="margin-bottom:12px">${help}</p>` : ''}
+    ${trail}
+    ${src.loading && src.items ? '<div class="progress" style="margin-bottom:8px"><i></i></div>' : ''}
     ${list}
     <label class="drop" style="margin-top:14px">
-      <input type="file" multiple data-upload="${id}" data-kind="${kind}">
-      ${st.uploading ? `Enviando ${plural(st.uploading, 'arquivo', 'arquivos')}…<div class="progress"><i></i></div>` : `${ic('upload').replace('<svg ', '<svg style="width:20px;height:20px;vertical-align:-4px;margin-right:6px" ')}Enviar documentos para esta pasta`}
+      <input type="file" multiple data-upload="${id}" data-kind="${kind}" data-folder="${cur ? esc(cur.id) : ''}">
+      ${st.uploading ? `Enviando ${plural(st.uploading, 'arquivo', 'arquivos')}…<div class="progress"><i></i></div>` : `${ic('upload').replace('<svg ', '<svg style="width:20px;height:20px;vertical-align:-4px;margin-right:6px" ')}Enviar documentos para ${cur ? '"' + esc(cur.name) + '"' : 'esta pasta'}`}
     </label>
     <p class="small muted" style="margin-top:10px">O que for adicionado ou alterado direto no Drive aparece aqui ao atualizar. <button class="btn btn-text btn-sm" type="button" data-action="link-folder" data-kind="${kind}" data-id="${id}">${ic('link')}Usar uma pasta que já existe</button></p>`;
 }
 function loadFiles(kind, id, force) {
   const st = S.files[fkey(kind, id)] = S.files[fkey(kind, id)] || {};
-  if (st.loading || ((st.items || st.error) && !force)) return;
+  if (st.loading || st.waiting || ((st.items || st.error) && !force)) return;
+  // Se ainda há gravação a caminho (ex.: processo recém-criado), espera ela terminar antes de ler a pasta.
+  if (S.pending) { st.waiting = true; setTimeout(() => { st.waiting = false; loadFiles(kind, id, force); }, 700); return; }
   st.loading = true; st.error = '';
   if (force) rerender();
   call('api_listFiles', kind, id).then(r => {
@@ -768,17 +954,34 @@ function loadFiles(kind, id, force) {
   }).catch(err => { st.error = 'Não consegui ler a pasta no Drive: ' + err.message; })
     .finally(() => { st.loading = false; rerender(); });
 }
-const MAX_UPLOAD = 25 * 1024 * 1024;
-function uploadFiles(kind, id, fileList) {
+function loadFolder(node) {
+  node.loading = true; node.error = ''; rerender();
+  call('api_listFolder', node.id).then(r => { node.items = r.items; node.url = r.folder.url; })
+    .catch(err => { node.error = 'Não consegui abrir a pasta: ' + err.message; })
+    .finally(() => { node.loading = false; rerender(); });
+}
+function openFolder(kind, id, folderId, name) {
   const st = S.files[fkey(kind, id)] = S.files[fkey(kind, id)] || {};
+  st.nav = (st.nav || []).concat([{ id: folderId, name }]);
+  loadFolder(st.nav[st.nav.length - 1]);
+}
+function refreshDocs(kind, id) {
+  const st = S.files[fkey(kind, id)] || {};
+  if (st.nav && st.nav.length) loadFolder(st.nav[st.nav.length - 1]);
+  else loadFiles(kind, id, true);
+}
+const MAX_UPLOAD = 25 * 1024 * 1024;
+function uploadFiles(kind, id, fileList, folderId) {
+  const st = S.files[fkey(kind, id)] = S.files[fkey(kind, id)] || {};
+  const target = folderId ? (st.nav || []).find(n => n.id === folderId) : st;
   Array.from(fileList).forEach(file => {
     if (file.size > MAX_UPLOAD) { toast(`"${file.name}" tem mais de 25 MB. Envie esse pelo Google Drive, direto na pasta.`, true); return; }
     st.uploading = (st.uploading || 0) + 1; rerender();
     const reader = new FileReader();
     reader.onload = () => {
       const data = String(reader.result).split(',')[1];
-      call('api_upload', kind, id, { name: file.name, mime: file.type || 'application/octet-stream', data })
-        .then(item => { st.items = [item].concat((st.items || []).filter(f => f.id !== item.id)); toast('Enviado para o Drive: ' + file.name); })
+      call('api_upload', kind, id, { name: file.name, mime: file.type || 'application/octet-stream', data }, folderId || null)
+        .then(item => { if (target) target.items = [item].concat((target.items || []).filter(f => f.id !== item.id)); toast('Enviado para o Drive: ' + file.name); })
         .catch(err => toast('Falha ao enviar ' + file.name + ': ' + err.message, true))
         .finally(() => { st.uploading--; rerender(); });
     };
@@ -1024,10 +1227,11 @@ function submitContrato(id) {
   const fm = $('#fm'), v = readForm(fm);
   // Cliente
   let clienteId = v.cliente_id;
+  const waits = [];
   if (clienteId === '__novo') {
     if (!v.nc_nome) return invalid(fm.nc_nome, 'Informe o nome do cliente novo.');
     const novo = { id: uid(), nome: v.nc_nome, whatsapp: v.nc_whatsapp, origem: v.nc_origem, campanha_id: v.campanha_id, status: 'ativo', drive_folder_id: '' };
-    save('clientes', novo);
+    waits.push(save('clientes', novo));
     clienteId = novo.id;
   }
   if (!clienteId) return invalid(fm.cliente_id, 'Escolha o cliente.');
@@ -1036,7 +1240,7 @@ function submitContrato(id) {
   if (produtoId === '__novo') {
     if (!v.np_nome) return invalid(fm.np_nome, 'Informe o nome do serviço.');
     const np = { id: uid(), nome: v.np_nome, area: v.np_area, valor_referencia: null, ativo: true };
-    save('produtos', np);
+    waits.push(save('produtos', np));
     produtoId = np.id;
   }
   if (!produtoId) return invalid(fm.produto_id, 'Escolha o serviço.');
@@ -1055,7 +1259,7 @@ function submitContrato(id) {
   const cli = byId('clientes', clienteId);
   if (cli && cli.status === 'lead') save('clientes', Object.assign({}, cli, { status: 'ativo' }));
   const parcelas = S.form.parcelas.map(p => Object.assign({}, p, { contrato_id: c.id }));
-  saveContrato(c, parcelas);
+  saveContrato(c, parcelas, Promise.all(waits));
   toast(id ? 'Processo atualizado.' : 'Processo salvo. As parcelas já estão nos recebíveis.');
   closeDrawer();
   openProcesso(c.id);
@@ -1086,15 +1290,53 @@ function vRecebiveis() {
   });
   const filtroMes = mes ? `<button class="chip" type="button" aria-pressed="true" data-action="rec-month" data-key="">${mes === 'late' ? 'Só atrasadas' : mes === 'depois' ? 'Depois de 12 meses' : esc(monthLabel(mes))} ${ic('x').replace('<svg ', '<svg style="width:12px;height:12px;vertical-align:-1px" ')}</button>` : '';
   const empty = !T('parcelas').length
-    ? `<div class="panel empty"><h3>Nada a receber ainda</h3><p>As parcelas aparecem aqui quando você cadastra um processo.</p><button class="btn btn-primary" type="button" data-action="new" data-what="contrato">${ic('plus')}Cadastrar processo</button></div>`
+    ? `<div class="panel empty"><h3>Nada a receber ainda</h3><p>As parcelas aparecem aqui quando você cadastra um processo. Consultas e outros valores avulsos entram por "Recebimento avulso".</p><div class="row" style="justify-content:center"><button class="btn btn-primary" type="button" data-action="new" data-what="contrato">${ic('plus')}Cadastrar processo</button><button class="btn btn-ghost" type="button" data-action="new" data-what="receita">${ic('plus')}Recebimento avulso</button></div></div>`
     : '<div class="panel empty"><p>Nenhuma parcela com esse filtro.</p></div>';
   return `<div class="toolbar">
       <div class="period">${[['pendentes', 'A receber'], ['pagas', 'Recebidas'], ['todas', 'Todas']].map(([v, l]) => `<button type="button" class="chip" data-action="rec-modo" data-v="${v}" aria-pressed="${modo === v}">${l}</button>`).join('')}${filtroMes}</div>
-      <span class="total-line">${plural(ps.length, 'parcela', 'parcelas')}, <b>${brl(sum(ps, p => p.valor))}</b></span>
+      <span class="total-line">${plural(ps.length, 'lançamento', 'lançamentos')}, <b>${brl(sum(ps, p => p.valor))}</b></span>
+      <button class="btn btn-ghost" type="button" data-action="new" data-what="receita">${ic('plus')}Recebimento avulso</button>
     </div>
     ${groups.length ? `<section class="panel">${groups.map(g => `<div class="month-group">
         <div class="month-head"><h3>${esc(monthLabel(g.k))}</h3><b class="num">${brl(sum(g.items, p => p.valor))}</b></div>
         <div class="list">${g.items.map(p => linhaParcela(p)).join('')}</div></div>`).join('')}</section>` : empty}`;
+}
+const STATUS_RECEITA = [['paga', 'Já recebido'], ['pendente', 'A receber']];
+function formReceita(id) {
+  const r = id ? byId('parcelas', id) : { status: 'paga', vencimento: today(), categoria: (S.config.categorias_receita || [])[0] };
+  const cliOpts = [['', 'Não é cliente cadastrado']].concat(T('clientes').slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => [c.id, c.nome]));
+  openDrawer(() => ({
+    title: id ? 'Editar recebimento' : 'Recebimento avulso',
+    sub: id ? '' : 'Consultas, pareceres e outros valores que não fazem parte de um processo.',
+    body: `<form class="form" id="fm" autocomplete="off">
+      ${field('valor', 'Valor', 'money', r.valor, { required: true, autofocus: true })}
+      ${field('categoria', 'Tipo', 'select', r.categoria, { options: optList('categorias_receita') })}
+      <div class="field full"><label>Situação</label>${seg('status', r.status === 'paga' ? 'paga' : 'pendente', STATUS_RECEITA)}</div>
+      ${field('vencimento', 'Data', 'date', r.status === 'paga' ? (r.data_pagamento || r.vencimento) : r.vencimento, { hint: 'Quando recebeu, ou quando vai receber.' })}
+      ${field('cliente_id', 'Cliente', 'select', r.cliente_id, { options: cliOpts })}
+      ${field('pessoa', 'Nome da pessoa', 'text', r.pessoa, { full: true, placeholder: 'Para quem ainda não é cliente', hint: 'Use quando a consulta for de alguém que não está cadastrado.' })}
+      ${field('descricao', 'Descrição', 'text', r.descricao, { full: true, placeholder: 'Ex.: Consulta sobre divórcio' })}
+    </form>`,
+    foot: `${id ? `<button class="btn btn-danger" type="button" data-action="del" data-what="receita" data-id="${id}">Excluir</button>` : ''}<span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-action="close">Cancelar</button>
+      <button class="btn btn-primary" type="button" data-action="submit-receita" data-id="${id || ''}">${id ? 'Salvar alterações' : 'Lançar recebimento'}</button>`
+  }));
+}
+function submitReceita(id) {
+  const fm = $('#fm'), v = readForm(fm);
+  if (!v.valor) return invalid(fm.valor, 'Informe o valor.');
+  if (!v.vencimento) return invalid(fm.vencimento, 'Informe a data.');
+  const base = id ? byId('parcelas', id) : { id: uid() };
+  const paga = v.status === 'paga';
+  save('parcelas', Object.assign({}, base, {
+    contrato_id: '', numero: 1, tipo: 'fixa', condicao: '',
+    valor: v.valor, vencimento: v.vencimento, status: paga ? 'paga' : 'pendente', data_pagamento: paga ? v.vencimento : '',
+    categoria: v.categoria, descricao: v.descricao, pessoa: v.pessoa, cliente_id: v.cliente_id
+  }));
+  toast(id ? 'Recebimento atualizado.' : 'Recebimento lançado.');
+  closeDrawer();
+  // Mostra o lançamento recém-feito na lista em que ele aparece.
+  if (S.route === 'recebiveis' && !id) { S.rec.modo = paga ? 'pagas' : 'pendentes'; S.rec.mes = ''; rerender(); }
 }
 function togglePaga(id) {
   const p = byId('parcelas', id);
@@ -1273,15 +1515,19 @@ const LISTAS = [
   ['categorias_gasto', 'Categorias de gasto', 'Usadas ao lançar um gasto.'],
   ['origens', 'Como os clientes chegam', 'Usadas no cadastro do cliente.'],
   ['areas', 'Áreas de atuação', 'Agrupam os produtos e serviços.'],
-  ['plataformas', 'Plataformas de anúncio', 'Usadas nas campanhas.']
+  ['plataformas', 'Plataformas de anúncio', 'Usadas nas campanhas.'],
+  ['tipos_prazo', 'Tipos de prazo', 'Usados na agenda.'],
+  ['categorias_receita', 'Tipos de recebimento avulso', 'Usados ao lançar consultas e outros recebimentos.']
 ];
 /** Onde cada lista é usada: renomear um item atualiza esses registros. */
-const LIST_USO = { areas: ['produtos', 'area'], categorias_gasto: ['gastos', 'categoria'], plataformas: ['campanhas', 'plataforma'], origens: ['clientes', 'origem'] };
+const LIST_USO = { areas: ['produtos', 'area'], categorias_gasto: ['gastos', 'categoria'], plataformas: ['campanhas', 'plataforma'], origens: ['clientes', 'origem'], tipos_prazo: ['prazos', 'tipo'], categorias_receita: ['parcelas', 'categoria'] };
 const RENAME_HINT = {
   areas: 'Todos os serviços desta área passam a usar o nome novo.',
   categorias_gasto: 'Todos os gastos desta categoria passam a usar o nome novo.',
   plataformas: 'Todas as campanhas desta plataforma passam a usar o nome novo.',
-  origens: 'Todos os clientes com esta origem passam a usar o nome novo.'
+  origens: 'Todos os clientes com esta origem passam a usar o nome novo.',
+  tipos_prazo: 'Todos os prazos deste tipo passam a usar o nome novo.',
+  categorias_receita: 'Todos os recebimentos deste tipo passam a usar o nome novo.'
 };
 function renameItem(k, i, novo) {
   const arr = (S.config[k] || []).slice();
@@ -1324,6 +1570,8 @@ function vAjustes() {
 function menuNovo() {
   const op = [
     ['contrato', 'file', 'Processo', 'Contrato fechado: cliente, serviço, honorários e parcelas'],
+    ['prazo', 'clock', 'Prazo ou tarefa', 'Entra na agenda; pode ser de um processo ou avulso'],
+    ['receita', 'coin', 'Recebimento avulso', 'Consulta ou outro valor fora de um processo'],
     ['cliente', 'users', 'Cliente', 'Também cria a pasta no Drive'],
     ['gasto', 'wallet', 'Gasto', 'Mentoria, curso, software, anúncio'],
     ['campanha', 'mega', 'Campanha', 'Meta Ads ou Google Ads'],
@@ -1347,12 +1595,17 @@ function menuMais() {
 /* =========================================================================
    EVENTOS
    ========================================================================= */
-const NEW = { contrato: (el) => formContrato(null, el.dataset.cliente), cliente: () => formCliente(), gasto: () => formGasto(), campanha: () => formCampanha(), produto: () => formProduto() };
-const EDIT = { contrato: id => formContrato(id), cliente: id => formCliente(id), gasto: id => formGasto(id), campanha: id => formCampanha(id), produto: id => formProduto(id) };
-const TABLE = { contrato: 'contratos', cliente: 'clientes', gasto: 'gastos', campanha: 'campanhas', produto: 'produtos' };
+const NEW = {
+  contrato: (el) => formContrato(null, el.dataset.cliente), cliente: () => formCliente(), gasto: () => formGasto(), campanha: () => formCampanha(), produto: () => formProduto(),
+  prazo: el => formPrazo(null, { cliente: el.dataset.cliente, processo: el.dataset.processo, data: el.dataset.data }), receita: () => formReceita()
+};
+const EDIT = { contrato: id => formContrato(id), cliente: id => formCliente(id), gasto: id => formGasto(id), campanha: id => formCampanha(id), produto: id => formProduto(id), prazo: id => formPrazo(id), receita: id => formReceita(id) };
+const TABLE = { contrato: 'contratos', cliente: 'clientes', gasto: 'gastos', campanha: 'campanhas', produto: 'produtos', prazo: 'prazos', receita: 'parcelas' };
 const DEL_TXT = {
-  cliente: id => `Excluir ${esc(clienteNome(id))} e ${plural(contratosDe(id).length, 'processo', 'processos')}? As pastas no Drive são mantidas.`,
-  contrato: () => 'Excluir este processo e as parcelas dele? A pasta no Drive é mantida.',
+  cliente: id => `Excluir ${esc(clienteNome(id))}, ${plural(contratosDe(id).length, 'processo', 'processos')} e os prazos dele? As pastas no Drive são mantidas.`,
+  contrato: () => 'Excluir este processo, as parcelas e os prazos dele? A pasta no Drive é mantida.',
+  prazo: () => 'Excluir este item da agenda?',
+  receita: () => 'Excluir este recebimento?',
   gasto: () => 'Excluir este gasto?',
   campanha: () => 'Excluir esta campanha? Gastos e processos ligados a ela ficam sem campanha.',
   produto: id => T('contratos').some(k => k.produto_id === id) ? 'Há processos com este serviço. Prefira marcar como fora de oferta. Excluir mesmo assim?' : 'Excluir este serviço?'
@@ -1401,7 +1654,15 @@ const ACTIONS = {
       else if (w === 'cliente') go('clientes');
     });
   },
-  'files-refresh': el => loadFiles(el.dataset.kind, el.dataset.id, true),
+  'files-refresh': el => refreshDocs(el.dataset.kind, el.dataset.id),
+  'folder-open': el => openFolder(el.dataset.kind, el.dataset.id, el.dataset.folder, el.dataset.name),
+  'folder-up': el => { const st = S.files[fkey(el.dataset.kind, el.dataset.id)] || {}; st.nav = (st.nav || []).slice(0, +el.dataset.i); rerender(); },
+  'toggle-prazo': el => togglePrazo(el.dataset.id),
+  'cal-dia': el => { S.agenda.dia = el.dataset.d; if (el.dataset.d.slice(0, 7) !== S.agenda.mes) S.agenda.mes = el.dataset.d.slice(0, 7); rerender(); },
+  'cal-mes': el => { S.agenda.mes = monthKey(addMonths(S.agenda.mes + '-01', +el.dataset.n)); rerender(); },
+  'cal-hoje': () => { S.agenda.mes = today().slice(0, 7); S.agenda.dia = today(); rerender(); },
+  'submit-prazo': el => submitPrazo(el.dataset.id),
+  'submit-receita': el => submitReceita(el.dataset.id),
   'link-folder': el => linkFolder(el.dataset.kind, el.dataset.id),
   'agrupar': el => { S.gasto.agrupar = el.dataset.v; rerender(); },
   'list-rename': el => { S.renaming = { k: el.dataset.k, i: +el.dataset.i }; rerender(); const inp = $('[data-list-rename] input'); if (inp) { inp.focus(); inp.select(); } },
@@ -1454,7 +1715,7 @@ document.addEventListener('change', e => {
     paintParcelas();
   }
   if (t.hasAttribute('data-money') && t.value) t.value = moneyIn(parseMoney(t.value));
-  if (t.dataset.upload) { uploadFiles(t.dataset.kind, t.dataset.upload, Array.from(t.files)); t.value = ''; }
+  if (t.dataset.upload) { uploadFiles(t.dataset.kind, t.dataset.upload, Array.from(t.files), t.dataset.folder); t.value = ''; }
 });
 document.addEventListener('submit', e => {
   const f = e.target;

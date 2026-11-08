@@ -18,16 +18,20 @@ const SCHEMA = {
   produtos:  ['id', 'nome', 'area', 'valor_referencia', 'ativo', 'criado_em', 'atualizado_em'],
   // contratos = processos (cada processo tem seu contrato de honorários)
   contratos: ['id', 'cliente_id', 'produto_id', 'data_fechamento', 'valor_total', 'forma_pagamento', 'status', 'campanha_id', 'observacoes', 'criado_em', 'atualizado_em', 'numero_processo', 'orgao', 'andamento', 'drive_folder_id'],
-  parcelas:  ['id', 'contrato_id', 'numero', 'valor', 'vencimento', 'tipo', 'condicao', 'status', 'data_pagamento', 'criado_em', 'atualizado_em'],
+  // parcelas = tudo que entra de dinheiro. Com contrato_id: parcela de um processo.
+  // Sem contrato_id: recebimento avulso (consulta, parecer…), descrito por categoria/descricao/pessoa/cliente_id.
+  parcelas:  ['id', 'contrato_id', 'numero', 'valor', 'vencimento', 'tipo', 'condicao', 'status', 'data_pagamento', 'criado_em', 'atualizado_em', 'categoria', 'descricao', 'pessoa', 'cliente_id'],
   gastos:    ['id', 'data', 'categoria', 'descricao', 'valor', 'campanha_id', 'fornecedor', 'criado_em', 'atualizado_em', 'produto_id'],
   campanhas: ['id', 'nome', 'plataforma', 'produto_id', 'inicio', 'fim', 'status', 'orcamento', 'observacoes', 'criado_em', 'atualizado_em'],
+  // prazos = agenda: prazos processuais, audiências, tarefas e lembretes (com ou sem cliente/processo)
+  prazos:    ['id', 'titulo', 'data', 'hora', 'tipo', 'cliente_id', 'contrato_id', 'status', 'observacoes', 'concluido_em', 'criado_em', 'atualizado_em'],
   config:    ['chave', 'valor']
 };
 
 /** Nome da aba de cada tabela na planilha. */
 const SHEET_NAMES = {
   clientes: 'Clientes', produtos: 'Produtos', contratos: 'Contratos', parcelas: 'Parcelas',
-  gastos: 'Gastos', campanhas: 'Campanhas', config: 'Config'
+  gastos: 'Gastos', campanhas: 'Campanhas', prazos: 'Prazos', config: 'Config'
 };
 
 /** Colunas numéricas por tabela. */
@@ -42,7 +46,7 @@ const NUMERIC = {
 /** Colunas booleanas por tabela. */
 const BOOLEAN = { produtos: ['ativo'] };
 
-const DATA_TABLES = ['clientes', 'produtos', 'contratos', 'parcelas', 'gastos', 'campanhas'];
+const DATA_TABLES = ['clientes', 'produtos', 'contratos', 'parcelas', 'gastos', 'campanhas', 'prazos'];
 
 const Repo = {
   _cache: {},
