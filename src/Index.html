@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#6F0B23">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <?!= include('Estilos'); ?>
+</head>
+<body>
+  <div class="shell" id="shell">
+    <aside class="sidebar" aria-label="Menu">
+      <div class="brand">
+        <span data-logo></span>
+        <div><strong>Giovanna Comácio</strong><span>Gestão do escritório</span></div>
+      </div>
+      <nav class="nav" id="nav"></nav>
+      <div class="sidebar-foot" id="foot"></div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <span class="brand-mini" data-logo></span>
+        <h1 id="title">Visão geral</h1>
+        <span class="sync" id="sync" role="status"><i></i><span>Tudo salvo</span></span>
+        <button class="btn btn-primary btn-new" data-action="new-menu" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Adicionar
+        </button>
+      </header>
+      <main id="view">
+        <div class="loading"><span data-logo></span><p>Carregando o painel…</p></div>
+      </main>
+    </div>
+
+    <nav class="tabbar" id="tabbar" aria-label="Navegação"></nav>
+    <button class="fab" data-action="new-menu" type="button" aria-label="Adicionar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+
+    <div class="scrim" data-action="close"></div>
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title"></aside>
+    <div class="toast" id="toast" role="alert"></div>
+  </div>
+
+  <?!= include('App'); ?>
+</body>
+</html>

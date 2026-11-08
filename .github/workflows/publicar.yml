@@ -1,0 +1,51 @@
+# Envia o código de src/ para o projeto Apps Script da Giovanna
+# sempre que algo em src/ muda na branch main (ou manualmente, pela aba Actions).
+#
+# Secrets necessários (Settings → Secrets and variables → Actions):
+#   CLASPRC_JSON   conteúdo do arquivo ~/.clasprc.json gerado por `npx @google/clasp@2.4.2 login`
+#   SCRIPT_ID      ID do script (Apps Script → Configurações do projeto)
+# Opcional:
+#   DEPLOYMENT_ID  ID da implantação /exec, para atualizá-la também (Implantar → Gerenciar implantações)
+
+name: Publicar no Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', '.github/workflows/publicar.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configurar acesso
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
+            echo "::error::Faltam os secrets CLASPRC_JSON e/ou SCRIPT_ID. Veja o README."
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          printf '{"scriptId":"%s","rootDir":"src"}' "$SCRIPT_ID" > .clasp.json
+
+      - name: Enviar código
+        run: npx --yes @google/clasp@2.4.2 push --force
+
+      - name: Atualizar implantação /exec (opcional)
+        env:
+          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
+        if: ${{ env.DEPLOYMENT_ID != '' }}
+        run: npx --yes @google/clasp@2.4.2 deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}"

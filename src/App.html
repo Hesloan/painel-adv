@@ -1,0 +1,1493 @@
+<script>
+(() => {
+'use strict';
+
+/* =========================================================================
+   Painel Giovanna Adv — telas
+   Todo acesso ao servidor passa por `call()` (google.script.run).
+   Na migração para outro backend, só `call()` muda (vira fetch).
+   ========================================================================= */
+
+const call = (fn, ...args) => new Promise((resolve, reject) => {
+  google.script.run
+    .withSuccessHandler(resolve)
+    .withFailureHandler(e => reject(e instanceof Error ? e : new Error(e && e.message ? e.message : String(e))))
+    [fn](...args);
+});
+
+// ---------------------------------------------------------------- ícones ---
+const LOGO = '<svg viewBox="1176 9 1731 1186" fill="currentColor" aria-hidden="true"><g transform="matrix(20.9745,0,0,20.9745,-903.805,-10333.6)"><g transform="matrix(0.368004,0,0,0.368004,-75.2939,-2454.74)"><path d="M641.484,8157.98C629.816,8157.98 618.947,8155.3 608.878,8149.95C608.077,8149.53 605.309,8147.97 605.309,8147.97L605.325,8139.96C605.325,8139.96 606.301,8140.84 606.8,8141.27C608.625,8142.84 610.546,8144.29 612.563,8145.64C621.432,8151.55 631.073,8154.5 641.484,8154.5C650.097,8154.5 658.034,8153.28 665.296,8150.84C668.785,8149.67 672.236,8148.08 675.651,8146.08C676.246,8145.73 677.432,8144.99 677.432,8144.99L677.293,8148.18C677.293,8148.18 676.577,8148.62 676.011,8148.95C665.666,8154.97 654.157,8157.98 641.484,8157.98Z"/></g><g transform="matrix(0.368004,0,0,0.368004,-107.479,-2454.74)"><path d="M641.484,8157.98C628.888,8157.98 617.223,8154.86 606.49,8148.62C595.757,8142.39 587.273,8133.94 581.039,8123.27C574.805,8112.6 571.688,8100.94 571.688,8088.27C571.688,8075.61 574.805,8063.92 581.039,8053.18C587.273,8042.45 595.757,8033.97 606.49,8027.73C617.223,8021.5 628.888,8018.38 641.484,8018.38C656.524,8018.38 670.084,8022.82 682.167,8031.69L682.167,8050.97L681.396,8050.97C681.01,8050.2 680.496,8048.94 679.853,8047.21C679.211,8045.47 678.761,8044.25 678.504,8043.54C678.247,8042.84 677.829,8041.94 677.251,8040.84C676.672,8039.75 676.062,8038.79 675.419,8037.95C674.776,8037.12 674.005,8036.25 673.105,8035.35C669.377,8031.75 664.686,8028.6 659.03,8025.9C653.374,8023.2 647.526,8021.85 641.484,8021.85C631.073,8021.85 621.432,8024.81 612.563,8030.72C603.694,8036.63 596.689,8044.7 591.547,8054.92C586.405,8065.14 583.835,8076.26 583.835,8088.27C583.835,8100.29 586.405,8111.38 591.547,8121.53C596.689,8131.69 603.694,8139.72 612.563,8145.64C621.432,8151.55 631.073,8154.5 641.484,8154.5C654.724,8154.5 666.293,8151.55 676.19,8145.64L676.19,8083.16C676.19,8081.62 676.062,8080.5 675.804,8079.79C675.547,8079.08 674.873,8078.35 673.78,8077.57C672.687,8076.8 670.984,8075.97 668.671,8075.07L668.671,8074.1L688.144,8074.1L688.144,8155.28L684.866,8155.28L676.19,8148.72C665.521,8154.89 653.953,8157.98 641.484,8157.98Z"/></g><g transform="matrix(0.368004,0,0,0.368004,-75.2939,-2454.74)"><path d="M598.973,8043.23L599.306,8032.37C599.306,8032.37 604.475,8028.9 606.49,8027.73C617.223,8021.5 628.888,8018.38 641.484,8018.38C656.524,8018.38 670.084,8022.82 682.167,8031.69L682.167,8050.97L681.396,8050.97C681.01,8050.2 680.496,8048.94 679.853,8047.21C679.211,8045.47 678.761,8044.25 678.504,8043.54C678.247,8042.84 677.829,8041.94 677.251,8040.84C676.672,8039.75 676.062,8038.79 675.419,8037.95C674.776,8037.12 674.005,8036.25 673.105,8035.35C669.377,8031.75 664.686,8028.6 659.03,8025.9C653.374,8023.2 647.526,8021.85 641.484,8021.85C631.073,8021.85 621.432,8024.81 612.563,8030.72C607.402,8034.16 598.973,8043.23 598.973,8043.23Z"/></g></g></svg>';
+
+const P = {
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.3-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.9.7 3.2 2.5 3.5 5.2"/>',
+  file: '<path d="M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h3"/>',
+  wallet: '<path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M16 13.5h.01"/>',
+  mega: '<path d="M4 10v4a1 1 0 0 0 1 1h2l6 4V5L7 9H5a1 1 0 0 0-1 1z"/><path d="M17 8.5a5 5 0 0 1 0 7"/>',
+  tag: '<path d="M3.5 12.5V5a1.5 1.5 0 0 1 1.5-1.5h7.5L21 12l-9 9z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  wa: '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.8z"/><path d="M9 9.5c0 2.8 2.7 5.5 5.5 5.5l1.2-1.4-2-1-1 .8a4 4 0 0 1-2.1-2.1l.8-1-1-2z"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
+  drive: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'
+};
+const ic = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`;
+
+// ---------------------------------------------------------------- estado ---
+const S = {
+  ready: false,
+  tables: { clientes: [], produtos: [], contratos: [], parcelas: [], gastos: [], campanhas: [] },
+  config: {}, meta: {},
+  route: 'inicio',
+  periodo: '12m',
+  q: '', clienteStatus: 'todos',
+  rec: { modo: 'pendentes', mes: '' },
+  gasto: { cat: '', periodo: 'tudo', agrupar: 'tipo' },
+  renaming: null,
+  pending: 0, failed: false,
+  sel: { cliente: '', processo: '' },
+  files: {},          // cache dos documentos (cliente:id / processo:id)
+  drawer: null,       // { render, live }
+  form: null          // estado do formulário de contrato
+};
+
+const ROUTES = [
+  { id: 'inicio', label: 'Visão geral', short: 'Início', icon: 'home' },
+  { id: 'clientes', label: 'Clientes', icon: 'users' },
+  { id: 'contratos', label: 'Processos', icon: 'file' },
+  { id: 'recebiveis', label: 'Recebíveis', short: 'Receber', icon: 'cal' },
+  { id: 'gastos', label: 'Gastos', icon: 'wallet' },
+  { id: 'campanhas', label: 'Campanhas', icon: 'mega', sep: true },
+  { id: 'produtos', label: 'Produtos e serviços', short: 'Produtos', icon: 'tag' },
+  { id: 'ajustes', label: 'Ajustes', icon: 'gear' }
+];
+const TABS = ['inicio', 'clientes', 'recebiveis', 'gastos'];
+const SUBPAGES = { cliente: 'clientes', processo: 'clientes' };
+
+// ------------------------------------------------------------- utilidades ---
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const brl = v => BRL.format(Number(v) || 0);
+const brlShort = v => {
+  v = Number(v) || 0;
+  if (v >= 1e6) return 'R$ ' + (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi';
+  if (v >= 1e4) return 'R$ ' + (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+  return 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+};
+const pad = n => String(n).padStart(2, '0');
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const MES3 = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const today = () => {
+  if (S.meta.hoje) return S.meta.hoje;
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const fmtDate = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : 'sem data';
+const monthKey = iso => (iso || '').slice(0, 7);
+const monthLabel = key => { if (!key) return 'Sem data definida'; const m = MESES[+key.slice(5, 7) - 1]; return `${m[0].toUpperCase()}${m.slice(1)} de ${key.slice(0, 4)}`; };
+const addMonths = (iso, n) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  return `${first.getUTCFullYear()}-${pad(first.getUTCMonth() + 1)}-${pad(Math.min(d || 1, last))}`;
+};
+const parseMoney = s => {
+  if (typeof s === 'number') return s;
+  s = String(s == null ? '' : s).trim().replace(/[R$\s]/g, '');
+  if (!s) return null;
+  if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return isNaN(n) ? null : Math.round(n * 100) / 100;
+};
+const moneyIn = v => (v == null || v === '') ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const uid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const sum = (arr, f) => arr.reduce((a, x) => a + (Number(f ? f(x) : x) || 0), 0);
+const initials = n => String(n || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+const waLink = num => {
+  let d = String(num || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.length <= 11) d = '55' + d;
+  return 'https://wa.me/' + d;
+};
+const fmtPhone = num => {
+  const d = String(num || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return num || '';
+};
+const fmtSize = b => !b ? '' : b < 1024 * 1024 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1024 / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' MB';
+const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+
+// ------------------------------------------------------------- consultas ---
+const T = t => S.tables[t];
+const byId = (t, id) => T(t).find(r => r.id === id);
+const clienteNome = id => (byId('clientes', id) || {}).nome || 'Cliente removido';
+const produtoNome = id => (byId('produtos', id) || {}).nome || 'Sem produto';
+const campanhaNome = id => (byId('campanhas', id) || {}).nome || '';
+const parcelasDe = contratoId => T('parcelas').filter(p => p.contrato_id === contratoId).sort((a, b) => (a.numero || 0) - (b.numero || 0));
+const contratosDe = clienteId => T('contratos').filter(c => c.cliente_id === clienteId).sort((a, b) => (b.data_fechamento || '').localeCompare(a.data_fechamento || ''));
+const contratoValido = c => c && c.status !== 'cancelado';
+const parcelaAtiva = p => contratoValido(byId('contratos', p.contrato_id));
+
+function statusParcela(p) {
+  if (p.status === 'paga') return 'paga';
+  if (p.vencimento && p.vencimento < today()) return 'atrasada';
+  if (p.tipo === 'estimada') return 'estimada';
+  return 'prevista';
+}
+function badgeParcela(p) {
+  const s = statusParcela(p);
+  const map = {
+    paga: ['b-ok', 'Recebida'],
+    atrasada: ['b-late', 'Atrasada'],
+    estimada: ['b-est', 'Data prevista'],
+    prevista: ['b-plan', 'A receber']
+  };
+  return `<span class="badge ${map[s][0]}">${map[s][1]}</span>`;
+}
+const pendentes = () => T('parcelas').filter(p => p.status !== 'paga' && parcelaAtiva(p));
+const aReceberCliente = id => sum(contratosDe(id).filter(contratoValido).flatMap(c => parcelasDe(c.id)).filter(p => p.status !== 'paga'), p => p.valor);
+
+const PERIODOS = [['mes', 'Este mês'], ['3m', '3 meses'], ['12m', '12 meses'], ['ano', 'Este ano'], ['tudo', 'Tudo']];
+function rangeOf(p) {
+  const t = today(), first = t.slice(0, 8) + '01', end = t.slice(0, 7) + '-31';
+  switch (p) {
+    case 'mes': return [first, end];
+    case '3m': return [addMonths(first, -2), end];
+    case '12m': return [addMonths(first, -11), end];
+    case 'ano': return [t.slice(0, 4) + '-01-01', t.slice(0, 4) + '-12-31'];
+    default: return ['0000-00-00', '9999-12-31'];
+  }
+}
+const inRange = (d, r) => !!d && d >= r[0] && d <= r[1];
+
+// ---------------------------------------------------- gravação (otimista) ---
+function upsertLocal(t, rec) {
+  const arr = T(t), i = arr.findIndex(r => r.id === rec.id);
+  if (i >= 0) arr[i] = rec; else arr.push(rec);
+}
+function track(promise) {
+  S.pending++; syncUI();
+  return promise
+    .then(r => { S.failed = false; return r; })
+    .catch(err => {
+      S.failed = true;
+      toast('Não foi possível salvar: ' + (err.message || err) + '. Recarreguei os dados.', true);
+      reload();
+      return null;
+    })
+    .finally(() => { S.pending--; syncUI(); });
+}
+function save(t, rec) {
+  upsertLocal(t, rec); rerender();
+  return track(call('api_save', t, rec)).then(saved => {
+    if (saved) { upsertLocal(t, saved); rerender(); }
+    return saved;
+  });
+}
+function saveContrato(c, parcelas) {
+  upsertLocal('contratos', c);
+  S.tables.parcelas = T('parcelas').filter(p => p.contrato_id !== c.id).concat(parcelas);
+  rerender();
+  return track(call('api_saveContrato', c, parcelas)).then(r => {
+    if (r) {
+      upsertLocal('contratos', r.contrato);
+      S.tables.parcelas = T('parcelas').filter(p => p.contrato_id !== c.id).concat(r.parcelas);
+      rerender();
+    }
+    return r;
+  });
+}
+function remove(t, id) {
+  if (t === 'clientes') {
+    const cids = contratosDe(id).map(c => c.id);
+    S.tables.parcelas = T('parcelas').filter(p => cids.indexOf(p.contrato_id) < 0);
+    S.tables.contratos = T('contratos').filter(c => c.cliente_id !== id);
+  }
+  if (t === 'contratos') S.tables.parcelas = T('parcelas').filter(p => p.contrato_id !== id);
+  S.tables[t] = T(t).filter(r => r.id !== id);
+  rerender();
+  return track(call('api_delete', t, id));
+}
+function reload() {
+  return call('api_bootstrap').then(d => {
+    S.tables = d.tables; S.config = d.config; S.meta = d.meta; S.ready = true;
+    rerender();
+  });
+}
+
+// --------------------------------------------------------------- interface ---
+function syncUI() {
+  const el = $('#sync');
+  el.className = 'sync' + (S.pending ? ' busy' : S.failed ? ' err' : '');
+  el.lastElementChild.textContent = S.pending ? 'Salvando…' : S.failed ? 'Erro ao salvar' : 'Tudo salvo';
+}
+let toastTimer;
+function toast(msg, isErr) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, isErr ? 6000 : 2600);
+}
+
+function renderChrome() {
+  const navRoute = SUBPAGES[S.route] || S.route;
+  $('#nav').innerHTML = ROUTES.map(r =>
+    (r.sep ? '<div class="nav-sep"></div>' : '') +
+    `<button type="button" data-action="go" data-route="${r.id}" ${navRoute === r.id ? 'aria-current="page"' : ''}>${ic(r.icon)}<span>${r.label}</span></button>`
+  ).join('');
+  const onTab = TABS.indexOf(navRoute) >= 0;
+  $('#tabbar').innerHTML = TABS.map(id => {
+    const r = ROUTES.find(x => x.id === id);
+    return `<button type="button" data-action="go" data-route="${id}" ${navRoute === id ? 'aria-current="page"' : ''}>${ic(r.icon)}<span>${r.short || r.label}</span></button>`;
+  }).join('') + `<button type="button" data-action="more" ${onTab ? '' : 'aria-current="page"'}>${ic('more')}<span>Mais</span></button>`;
+  const route = ROUTES.find(r => r.id === S.route);
+  $('#title').textContent = route ? route.label : '';
+  $('#foot').textContent = S.meta.version ? 'Versão ' + S.meta.version : '';
+}
+
+function rerender() {
+  if (!S.ready) return;
+  renderChrome();
+  const views = { cliente: vCliente, processo: vProcesso, inicio: vInicio, clientes: vClientes, contratos: vContratos, recebiveis: vRecebiveis, gastos: vGastos, campanhas: vCampanhas, produtos: vProdutos, ajustes: vAjustes };
+  $('#view').innerHTML = views[S.route]();
+  if (S.drawer && S.drawer.live) paintDrawer();
+}
+
+function go(route) {
+  S.route = route;
+  closeDrawer();
+  rerender();
+  window.scrollTo(0, 0);
+}
+
+// ---------------------------------------------------------------- gaveta ---
+function openDrawer(render, live) {
+  S.drawer = { render, live: !!live };
+  $('#drawer').innerHTML = '';
+  paintDrawer();
+  $('#shell').classList.add('open');
+  setTimeout(() => { const f = $('#drawer [autofocus]') || $('#drawer .drawer-body input, #drawer .drawer-body select'); if (f && window.innerWidth > 860) f.focus(); }, 60);
+}
+function paintDrawer() {
+  if (!S.drawer) return;
+  const d = S.drawer.render();
+  const scroll = $('#drawer .drawer-body') ? $('#drawer .drawer-body').scrollTop : 0;
+  $('#drawer').innerHTML = `
+    <div class="drawer-head">
+      ${d.lead || ''}
+      <div class="grow"><h2 id="drawer-title">${d.title}</h2>${d.sub ? `<p>${d.sub}</p>` : ''}</div>
+      ${d.actions || ''}
+      <button class="icon-btn" type="button" data-action="close" aria-label="Fechar">${ic('x')}</button>
+    </div>
+    <div class="drawer-body">${d.body}</div>
+    ${d.foot ? `<div class="drawer-foot" id="dfoot">${d.foot}</div>` : ''}`;
+  $('#drawer .drawer-body').scrollTop = scroll;
+  if (d.mount) d.mount($('#drawer'));
+}
+function closeDrawer() {
+  $('#shell').classList.remove('open');
+  S.drawer = null; S.form = null;
+}
+function setFoot(html) { const f = $('#dfoot'); if (f) f.innerHTML = html; }
+function askDelete(text, onYes) {
+  const prev = $('#dfoot').innerHTML;
+  setFoot(`<p class="small" style="flex:1;align-self:center">${text}</p>
+    <button class="btn btn-ghost" type="button" id="del-no">Cancelar</button>
+    <button class="btn btn-primary" type="button" id="del-yes">Excluir</button>`);
+  $('#del-no').onclick = () => setFoot(prev);
+  $('#del-yes').onclick = onYes;
+}
+
+// -------------------------------------------------------- campos de form ---
+function field(name, label, type, value, o = {}) {
+  const v = value == null ? '' : value;
+  const cls = 'field' + (o.full ? ' full' : '');
+  const req = o.required ? ' required' : '';
+  const hint = o.hint ? `<span class="hint">${o.hint}</span>` : '';
+  const id = 'f-' + name;
+  if (type === 'select') {
+    const opts = (o.options || []).map(op => {
+      const [val, lab] = Array.isArray(op) ? op : [op, op];
+      return `<option value="${esc(val)}" ${String(val) === String(v) ? 'selected' : ''}>${esc(lab)}</option>`;
+    }).join('');
+    return `<div class="${cls}"><label for="${id}">${label}</label><select id="${id}" name="${name}"${req}>${opts}</select>${hint}</div>`;
+  }
+  if (type === 'textarea') return `<div class="${cls}"><label for="${id}">${label}</label><textarea id="${id}" name="${name}" placeholder="${esc(o.placeholder || '')}">${esc(v)}</textarea>${hint}</div>`;
+  if (type === 'money') return `<div class="${cls}"><label for="${id}">${label}</label><input id="${id}" name="${name}" data-money inputmode="decimal" placeholder="0,00" value="${esc(moneyIn(v))}"${req}>${hint}</div>`;
+  return `<div class="${cls}"><label for="${id}">${label}</label><input id="${id}" name="${name}" type="${type}" value="${esc(v)}" placeholder="${esc(o.placeholder || '')}"${o.autofocus ? ' autofocus' : ''}${req}${type === 'tel' ? ' inputmode="tel"' : ''}>${hint}</div>`;
+}
+function seg(name, value, options) {
+  return `<div class="seg" data-seg="${name}">${options.map(([v, l]) =>
+    `<button type="button" data-action="seg" data-name="${name}" data-value="${esc(v)}" aria-pressed="${String(v) === String(value)}">${l}</button>`).join('')}</div>`;
+}
+function readForm(root) {
+  const out = {};
+  root.querySelectorAll('[name]').forEach(el => {
+    out[el.name] = el.hasAttribute('data-money') ? parseMoney(el.value) : el.value.trim();
+  });
+  root.querySelectorAll('[data-seg]').forEach(s => {
+    const on = s.querySelector('[aria-pressed="true"]');
+    out[s.dataset.seg] = on ? on.dataset.value : '';
+  });
+  return out;
+}
+function invalid(el, msg) {
+  toast(msg, true);
+  if (el) el.focus();
+  return false;
+}
+const SEM_ANUNCIO = ['Orgânico', 'Indicação'];
+const isPaga = c => SEM_ANUNCIO.indexOf(c.plataforma) < 0;
+const sortCamps = list => list.slice().sort((a, b) => (isPaga(a) - isPaga(b)) || ((a.status === 'encerrada') - (b.status === 'encerrada')) || a.nome.localeCompare(b.nome, 'pt-BR'));
+/** Origem de um processo/cliente: orgânico, indicação ou uma campanha paga. */
+const optOrigem = () => [['', 'Não informado']].concat(sortCamps(T('campanhas')).map(c => [c.id, c.nome]));
+/** Gastos só se ligam a campanhas pagas. */
+const optCampanhas = () => [['', 'Sem campanha']].concat(sortCamps(T('campanhas').filter(isPaga)).map(c => [c.id, c.nome]));
+const optList = key => (S.config[key] || []).map(x => [x, x]);
+
+/* =========================================================================
+   ÁRVORE DE GASTOS (tipo → área → serviço, ou área → serviço → tipo)
+   ========================================================================= */
+const GERAL = 'Geral do escritório';
+const servicoDoGasto = g => g.produto_id || (byId('campanhas', g.campanha_id) || {}).produto_id || '';
+const areaDoServico = id => { const p = byId('produtos', id); return p ? (p.area || 'Outro') : ''; };
+const AGRUPAR = [['tipo', 'Por tipo de gasto'], ['servico', 'Por área e serviço']];
+
+function arvoreGastos(gastos, modo, contr) {
+  const root = { n: '', v: 0, kids: {} };
+  const add = (path, valor) => {
+    let node = root; root.v += valor;
+    path.filter(Boolean).forEach(seg => {
+      node.kids[seg] = node.kids[seg] || { n: seg, v: 0, kids: {} };
+      node = node.kids[seg]; node.v += valor;
+    });
+  };
+  gastos.forEach(g => {
+    const sid = servicoDoGasto(g);
+    const area = areaDoServico(sid) || GERAL;
+    const serv = sid ? produtoNome(sid) : '';
+    const cat = g.categoria || 'Outro';
+    add(modo === 'servico' ? [area, serv, cat] : [cat, area, serv], Number(g.valor) || 0);
+  });
+  // Na visão por serviço, serviços com processos mas sem gasto também aparecem (retorno do orgânico/indicação).
+  if (modo === 'servico') (contr || []).forEach(k => add([areaDoServico(k.produto_id) || GERAL, produtoNome(k.produto_id)], 0));
+  return root;
+}
+
+function tabelaArvore(gastos, modo, contr, compact) {
+  const root = arvoreGastos(gastos, modo, contr);
+  if (!Object.keys(root.kids).length) return '';
+  const total = root.v || 1;
+  const comRetorno = modo === 'servico' && !compact;
+  const rows = [];
+  const walk = (node, depth, parents) => Object.values(node.kids)
+    .filter(k => !compact || k.v)
+    .sort((a, b) => ((a.n === GERAL) - (b.n === GERAL)) || b.v - a.v || a.n.localeCompare(b.n, 'pt-BR'))
+    .forEach(k => { rows.push({ k, depth, parents }); walk(k, depth + 1, parents.concat(k.n)); });
+  walk(root, 0, []);
+  const ret = (r) => {
+    if (!comRetorno || r.depth > 1) return '<td></td><td></td>';
+    const ks = contr.filter(k => (areaDoServico(k.produto_id) || GERAL) === (r.depth === 0 ? r.k.n : r.parents[0]) && (r.depth === 0 || produtoNome(k.produto_id) === r.k.n));
+    return `<td class="r num" data-l="Processos">${ks.length || '—'}</td><td class="r num" data-l="Contratado">${ks.length ? brl(sum(ks, k => k.valor_total)) : '—'}</td>`;
+  };
+  return `<table class="table tree${compact ? ' compact' : ''}"><thead><tr>
+      <th>${modo === 'servico' ? 'Área / serviço / tipo de gasto' : 'Tipo de gasto / área / serviço'}</th><th class="r">Investido</th>${compact ? '' : '<th class="r">% do total</th>'}${comRetorno ? '<th class="r">Processos</th><th class="r">Contratado</th>' : ''}
+    </tr></thead><tbody>
+    ${rows.map(r => `<tr class="lvl-${r.depth}">
+      <td><span class="tree-name" style="padding-left:${r.depth * 20}px">${esc(r.k.n)}</span>${r.depth < 2 && r.k.v ? `<div class="track" style="margin-left:${r.depth * 20}px"><div class="fill" style="width:${(r.k.v / total * 100).toFixed(1)}%"></div></div>` : ''}</td>
+      <td class="r num">${r.k.v ? brl(r.k.v) : '—'}</td>
+      ${compact ? '' : `<td class="r num">${r.k.v ? (r.k.v / total * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : ''}</td>`}
+      ${comRetorno ? ret(r) : ''}
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+const segAgrupar = () => `<div class="seg seg-inline" role="group" aria-label="Agrupar">${AGRUPAR.map(([v, l]) => `<button type="button" data-action="agrupar" data-v="${v}" aria-pressed="${S.gasto.agrupar === v}">${l}</button>`).join('')}</div>`;
+
+/* =========================================================================
+   VISÃO GERAL
+   ========================================================================= */
+function vInicio() {
+  const t = today();
+  const pend = pendentes();
+  const atrasadas = pend.filter(p => p.vencimento && p.vencimento < t);
+  const r = rangeOf(S.periodo);
+
+  // ---- faixa dos próximos meses
+  const startKey = monthKey(t);
+  const months = Array.from({ length: 12 }, (_, i) => monthKey(addMonths(t.slice(0, 8) + '01', i)));
+  const cols = [];
+  const late = sum(atrasadas, p => p.valor);
+  if (late > 0) cols.push({ key: 'late', label: '<b>Atrasado</b>', late, fix: 0, est: 0 });
+  months.forEach((k, i) => {
+    const ps = pend.filter(p => monthKey(p.vencimento) === k && !(p.vencimento < t));
+    const y = k.slice(0, 4), m = +k.slice(5, 7);
+    cols.push({
+      key: k, now: k === startKey,
+      label: (i === 0 || m === 1) ? `${MES3[m - 1]} <b>${y.slice(2)}</b>` : MES3[m - 1],
+      fix: sum(ps.filter(p => p.tipo !== 'estimada'), p => p.valor),
+      est: sum(ps.filter(p => p.tipo === 'estimada'), p => p.valor),
+      late: 0
+    });
+  });
+  const lastKey = months[months.length - 1];
+  const depois = pend.filter(p => !p.vencimento || monthKey(p.vencimento) > lastKey);
+  if (depois.length) cols.push({ key: 'depois', label: 'Depois', fix: sum(depois.filter(p => p.tipo !== 'estimada'), p => p.valor), est: sum(depois.filter(p => p.tipo === 'estimada'), p => p.valor), late: 0 });
+  const max = Math.max(1, ...cols.map(c => c.fix + c.est + c.late));
+  const totalPend = sum(pend, p => p.valor);
+  const temEst = pend.some(p => p.tipo === 'estimada');
+  const nContr = new Set(pend.map(p => p.contrato_id)).size;
+
+  const ribbon = cols.map(c => {
+    const tot = c.fix + c.est + c.late;
+    const h = v => (v / max * 100).toFixed(1) + '%';
+    return `<button type="button" class="month${c.now ? ' now' : ''}" data-action="rec-month" data-key="${c.key}" title="${c.key.length === 7 ? esc(monthLabel(c.key)) : ''}: ${brl(tot)}">
+      <span class="amt${tot ? '' : ' zero'}">${tot ? brlShort(tot) : '—'}</span>
+      <span class="bars">
+        ${c.est ? `<span class="bar-est" style="height:${h(c.est)}"></span>` : ''}
+        ${c.fix ? `<span class="bar-fix" style="height:${h(c.fix)}"></span>` : ''}
+        ${c.late ? `<span class="bar-late" style="height:${h(c.late)}"></span>` : ''}
+      </span>
+      <span class="lbl">${c.label}</span>
+    </button>`;
+  }).join('');
+
+  const hero = `<section class="hero" aria-labelledby="h-receber">
+    <div class="hero-top">
+      <div>
+        <h2 id="h-receber" class="muted" style="font-family:var(--font-body);font-size:.95rem;font-weight:500">Total a receber</h2>
+        <div class="hero-total num">${brl(totalPend)}</div>
+        <p class="hero-sub">${totalPend
+          ? `De ${plural(nContr, 'processo', 'processos')}. Toque em um mês para ver quem paga.${temEst ? ' A parte listrada depende de um evento, como o nascimento do bebê, e a data é uma previsão.' : ''}`
+          : 'Quando você cadastrar um processo, as parcelas aparecem aqui, mês a mês.'}</p>
+      </div>
+      <div class="legend">
+        <span><i class="lg-fix"></i>Data combinada</span>
+        <span><i class="lg-est"></i>Data prevista</span>
+        ${late ? '<span><i class="lg-late"></i>Atrasado</span>' : ''}
+      </div>
+    </div>
+    ${totalPend ? `<div class="ribbon">${ribbon}</div>` : `<div class="empty" style="padding:28px 0 8px"><button class="btn btn-primary" type="button" data-action="new" data-what="contrato">${ic('plus')}Cadastrar processo</button></div>`}
+  </section>`;
+
+  // ---- indicadores do período
+  const gastos = T('gastos').filter(g => inRange(g.data, r));
+  const contr = T('contratos').filter(c => contratoValido(c) && inRange(c.data_fechamento, r));
+  const investido = sum(gastos, g => g.valor);
+  const contratado = sum(contr, c => c.valor_total);
+  const recebido = sum(T('parcelas').filter(p => p.status === 'paga' && inRange(p.data_pagamento, r)), p => p.valor);
+  const custo = contr.length ? investido / contr.length : 0;
+  const kpis = `<div class="row spread wrap" style="margin:34px 0 12px">
+      <h2>No período</h2>
+      <div class="period" role="group" aria-label="Período">${PERIODOS.map(([v, l]) => `<button type="button" class="chip" data-action="periodo" data-v="${v}" aria-pressed="${S.periodo === v}">${l}</button>`).join('')}</div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><p>Investido</p><strong>${brl(investido)}</strong><span>${plural(gastos.length, 'gasto', 'gastos')}</span></div>
+      <div class="kpi"><p>Processos fechados</p><strong>${contr.length}</strong><span>${contr.length ? 'ticket médio ' + brl(contratado / contr.length) : 'nenhum no período'}</span></div>
+      <div class="kpi"><p>Valor contratado</p><strong>${brl(contratado)}</strong><span>soma dos contratos</span></div>
+      <div class="kpi"><p>Recebido</p><strong>${brl(recebido)}</strong><span>parcelas pagas no período</span></div>
+      <div class="kpi"><p>Custo por processo</p><strong>${contr.length ? brl(custo) : '—'}</strong><span>investido ÷ processos</span></div>
+    </div>`;
+
+  // ---- para onde foi o dinheiro (árvore)
+  const arvore = tabelaArvore(gastos, S.gasto.agrupar, contr, true);
+  const catPanel = `<section class="panel">
+    <div class="panel-head"><h3>Para onde foi o dinheiro</h3><button class="btn-text btn" type="button" data-action="go" data-route="gastos">Ver gastos</button></div>
+    ${arvore ? `<div style="margin-bottom:14px">${segAgrupar()}</div>${arvore}`
+      : `<div class="empty" style="padding:24px 0"><p>Nenhum gasto neste período.</p><button class="btn btn-ghost btn-sm" type="button" data-action="new" data-what="gasto">${ic('plus')}Lançar gasto</button></div>`}
+  </section>`;
+
+  // ---- próximos recebimentos
+  const prox = pend.filter(p => p.vencimento).sort((a, b) => a.vencimento.localeCompare(b.vencimento)).slice(0, 6);
+  const proxPanel = `<section class="panel">
+    <div class="panel-head"><h3>Próximos recebimentos</h3><button class="btn-text btn" type="button" data-action="go" data-route="recebiveis">Ver todos</button></div>
+    ${prox.length ? `<div class="list">${prox.map(p => linhaParcela(p, true)).join('')}</div>` : '<p class="muted small">Nada pendente.</p>'}
+  </section>`;
+
+  // ---- campanhas
+  const camps = T('campanhas').map(statsCampanha).filter(s => s.gasto || s.contratos).sort((a, b) => b.gasto - a.gasto);
+  const campPanel = `<section class="panel">
+    <div class="panel-head"><h3>Retorno das campanhas</h3><button class="btn-text btn" type="button" data-action="go" data-route="campanhas">Ver campanhas</button></div>
+    ${camps.length ? `<table class="table resp"><thead><tr><th>Campanha</th><th class="r">Investido</th><th class="r">Processos</th><th class="r">Contratado</th><th class="r">Retorno</th></tr></thead><tbody>
+      ${camps.map(s => `<tr class="click" data-action="edit" data-what="campanha" data-id="${s.c.id}"><td data-l="Campanha"><b>${esc(s.c.nome)}</b><br><span class="small muted">${isPaga(s.c) ? esc(s.c.plataforma || '') : 'sem anúncio'}</span></td><td class="r num" data-l="Investido">${brl(s.gasto)}</td><td class="r num" data-l="Processos">${s.contratos}</td><td class="r num" data-l="Contratado">${brl(s.valor)}</td><td class="r num" data-l="Retorno">${s.gasto ? (s.valor / s.gasto).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '×' : '—'}</td></tr>`).join('')}
+      </tbody></table>` : '<p class="muted small">Ao lançar gastos e processos, escolha a campanha ou origem para ver quanto cada uma traz de volta.</p>'}
+  </section>`;
+
+  // ---- produtos
+  const porProd = {};
+  contr.forEach(c => { const k = c.produto_id; porProd[k] = porProd[k] || { n: 0, v: 0 }; porProd[k].n++; porProd[k].v += c.valor_total || 0; });
+  const prods = Object.entries(porProd).sort((a, b) => b[1].v - a[1].v);
+  const pmax = prods.length ? prods[0][1].v || 1 : 1;
+  const prodPanel = `<section class="panel">
+    <div class="panel-head"><h3>Processos por serviço</h3><p>no período</p></div>
+    ${prods.length ? `<div class="hbars">${prods.map(([id, s]) => `<div class="hbar"><span>${esc(produtoNome(id))} <span class="muted small">(${s.n})</span></span><b class="num">${brl(s.v)}</b><div class="track"><div class="fill" style="width:${(s.v / pmax * 100).toFixed(1)}%"></div></div></div>`).join('')}</div>` : '<p class="muted small">Nenhum processo fechado no período.</p>'}
+  </section>`;
+
+  const alert = atrasadas.length ? `<div class="alert" style="margin-bottom:20px"><div class="grow"><b>${plural(atrasadas.length, 'parcela atrasada', 'parcelas atrasadas')}</b>, somando ${brl(late)}.</div><button class="btn btn-sm" type="button" data-action="rec-month" data-key="late">Ver quais</button></div>` : '';
+
+  return `${alert}${hero}${kpis}
+    <div class="grid g-wide" style="margin-top:20px">${proxPanel}${catPanel}</div>
+    <div class="grid g-wide" style="margin-top:20px">${campPanel}${prodPanel}</div>`;
+}
+
+function statsCampanha(c) {
+  const gasto = sum(T('gastos').filter(g => g.campanha_id === c.id), g => g.valor);
+  const contr = T('contratos').filter(k => contratoValido(k) && (k.campanha_id === c.id));
+  const clientes = T('clientes').filter(k => k.campanha_id === c.id).length;
+  return { c, gasto, clientes, contratos: contr.length, valor: sum(contr, k => k.valor_total) };
+}
+
+function linhaParcela(p, compact) {
+  const c = byId('contratos', p.contrato_id) || {};
+  const total = parcelasDe(p.contrato_id).length;
+  const paga = p.status === 'paga';
+  const sub = [produtoNome(c.produto_id), total > 1 ? `parcela ${p.numero} de ${total}` : '', p.condicao].filter(Boolean).join(', ');
+  return `<div class="item static">
+    <div class="grow" data-action="open-processo" data-id="${p.contrato_id}" style="cursor:pointer">
+      <div class="t">${esc(clienteNome(c.cliente_id))}</div>
+      <div class="s">${esc(sub)}</div>
+    </div>
+    <div class="v"><b>${brl(p.valor)}</b><div class="small ${statusParcela(p) === 'atrasada' ? 'late-date' : 'muted'}">${paga && p.data_pagamento ? 'em ' + fmtDate(p.data_pagamento) : ({ atrasada: 'venceu ', estimada: 'previsto ' }[statusParcela(p)] || '') + fmtDate(p.vencimento)}</div></div>
+    ${compact ? '' : badgeParcela(p)}
+    <button class="icon-btn" type="button" data-action="toggle-paga" data-id="${p.id}" aria-label="${paga ? 'Desmarcar recebimento' : 'Marcar como recebida'}" title="${paga ? 'Desmarcar recebimento' : 'Marcar como recebida'}" style="${paga ? 'background:var(--ok-soft);color:var(--ok);border-color:transparent' : ''}">${ic('check')}</button>
+  </div>`;
+}
+
+/* =========================================================================
+   CLIENTES
+   ========================================================================= */
+const STATUS_CLIENTE = [['ativo', 'Cliente'], ['lead', 'Em negociação'], ['encerrado', 'Encerrado']];
+const statusClienteLabel = s => (STATUS_CLIENTE.find(x => x[0] === s) || ['', 'Cliente'])[1];
+
+function vClientes() {
+  const q = norm(S.q);
+  let list = T('clientes').slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  if (S.clienteStatus !== 'todos') list = list.filter(c => (c.status || 'ativo') === S.clienteStatus);
+  if (q) list = list.filter(c => norm(c.nome + ' ' + c.whatsapp + ' ' + c.cidade + ' ' + c.email).indexOf(q) >= 0);
+  const chips = [['todos', 'Todos']].concat(STATUS_CLIENTE).map(([v, l]) => `<button type="button" class="chip" data-action="cli-status" data-v="${v}" aria-pressed="${S.clienteStatus === v}">${l}</button>`).join('');
+  if (!T('clientes').length) {
+    return `<div class="panel empty"><h3>Nenhum cliente ainda</h3><p>Cada cliente ganha uma pasta própria no Google Drive, onde ficam os documentos dele.</p>
+      <button class="btn btn-primary" type="button" data-action="new" data-what="cliente">${ic('plus')}Cadastrar cliente</button></div>`;
+  }
+  return `<div class="toolbar">
+      <input class="search" type="search" placeholder="Buscar por nome, telefone ou cidade" value="${esc(S.q)}" data-input="q" aria-label="Buscar clientes">
+      <div class="period">${chips}</div>
+    </div>
+    <section class="panel" style="padding-top:8px;padding-bottom:8px">
+      ${list.length ? `<div class="list">${list.map(linhaCliente).join('')}</div>` : '<p class="empty">Nenhum cliente encontrado.</p>'}
+    </section>`;
+}
+function linhaCliente(c) {
+  const contrs = contratosDe(c.id).filter(contratoValido);
+  const prods = [...new Set(contrs.map(k => produtoNome(k.produto_id)))].join(', ');
+  const ar = aReceberCliente(c.id);
+  const wa = waLink(c.whatsapp);
+  const sub = [prods || statusClienteLabel(c.status), c.cidade].filter(Boolean).join(', ');
+  return `<div class="item" role="button" tabindex="0" data-action="open-cliente" data-id="${c.id}">
+    <span class="avatar">${esc(initials(c.nome))}</span>
+    <div class="grow"><div class="t">${esc(c.nome)}</div><div class="s">${esc(sub)}</div></div>
+    ${ar ? `<div class="v"><b>${brl(ar)}</b><div class="small muted">a receber</div></div>` : ''}
+    ${wa ? `<a class="icon-btn wa" href="${wa}" target="_blank" rel="noopener" aria-label="Abrir WhatsApp de ${esc(c.nome)}" data-stop>${ic('wa')}</a>` : ''}
+  </div>`;
+}
+
+// ------------------------------------------------- páginas de cliente/processo ---
+function openCliente(id) { if (!id || !byId('clientes', id)) return; S.sel.cliente = id; go('cliente'); }
+function openProcesso(id) { const k = byId('contratos', id); if (!k) return; S.sel.processo = id; S.sel.cliente = k.cliente_id; go('processo'); }
+function crumbs(parts) {
+  return `<nav class="crumbs" aria-label="Caminho">${parts.map((p, i) => i < parts.length - 1
+    ? `<button type="button" data-action="${p.action}" data-route="${p.route || ''}" data-id="${p.id || ''}">${esc(p.label)}</button><span aria-hidden="true">/</span>`
+    : `<span aria-current="page">${esc(p.label)}</span>`).join('')}</nav>`;
+}
+const notFound = what => `<div class="panel empty"><h3>${what} não encontrado</h3><button class="btn btn-ghost" type="button" data-action="go" data-route="clientes">Voltar para clientes</button></div>`;
+const toggleBtn = p => `<button class="icon-btn" type="button" data-action="toggle-paga" data-id="${p.id}" aria-label="${p.status === 'paga' ? 'Desmarcar recebimento' : 'Marcar como recebida'}" title="${p.status === 'paga' ? 'Desmarcar recebimento' : 'Marcar como recebida'}" style="${p.status === 'paga' ? 'background:var(--ok-soft);color:var(--ok);border-color:transparent' : ''}">${ic('check')}</button>`;
+const statusProcBadge = k => k.status === 'cancelado' ? '<span class="badge b-mute">Cancelado</span>' : k.status === 'concluido' ? '<span class="badge b-ok">Concluído</span>' : '<span class="badge b-plan">Em andamento</span>';
+
+function vCliente() {
+  const c = byId('clientes', S.sel.cliente);
+  if (!c) return notFound('Cliente');
+  loadFiles('cliente', c.id, false);
+  const wa = waLink(c.whatsapp);
+  const procs = contratosDe(c.id);
+  const ativos = procs.filter(contratoValido);
+  const parcs = ativos.flatMap(k => parcelasDe(k.id));
+  const info = [
+    ['WhatsApp', c.whatsapp ? fmtPhone(c.whatsapp) : ''],
+    ['E-mail', c.email], ['Cidade', c.cidade], ['Como chegou', c.origem], ['Campanha', campanhaNome(c.campanha_id)]
+  ].filter(x => x[1]);
+  return `${crumbs([{ label: 'Clientes', action: 'go', route: 'clientes' }, { label: c.nome }])}
+    <header class="page-head">
+      <span class="avatar avatar-lg">${esc(initials(c.nome))}</span>
+      <div class="grow"><h1>${esc(c.nome)}</h1><p class="muted">${esc([statusClienteLabel(c.status), c.cidade].filter(Boolean).join(', '))}</p></div>
+      <div class="row wrap">
+        ${wa ? `<a class="btn btn-ghost wa" href="${wa}" target="_blank" rel="noopener">${ic('wa')}WhatsApp</a>` : ''}
+        <button class="btn btn-ghost" type="button" data-action="edit" data-what="cliente" data-id="${c.id}">${ic('edit')}Editar</button>
+        <button class="btn btn-primary" type="button" data-action="new" data-what="contrato" data-cliente="${c.id}">${ic('plus')}Novo processo</button>
+      </div>
+    </header>
+    <div class="kpis kpis-3">
+      <div class="kpi"><p>Honorários contratados</p><strong>${brl(sum(ativos, k => k.valor_total))}</strong><span>${plural(ativos.length, 'processo ativo', 'processos ativos')}</span></div>
+      <div class="kpi"><p>Recebido</p><strong>${brl(sum(parcs.filter(p => p.status === 'paga'), p => p.valor))}</strong></div>
+      <div class="kpi"><p>A receber</p><strong>${brl(sum(parcs.filter(p => p.status !== 'paga'), p => p.valor))}</strong></div>
+    </div>
+    <div class="grid g-wide" style="margin-top:20px">
+      <section class="panel">
+        <div class="panel-head"><h3>Processos</h3><p>${plural(procs.length, 'processo', 'processos')}</p></div>
+        ${procs.length ? `<div class="list">${procs.map(linhaProcesso).join('')}</div>`
+          : `<div class="empty" style="padding:28px 0"><p>Nenhum processo ainda.</p><button class="btn btn-primary btn-sm" type="button" data-action="new" data-what="contrato" data-cliente="${c.id}">${ic('plus')}Cadastrar processo</button></div>`}
+      </section>
+      <div class="stack">
+        <section class="panel">
+          <div class="panel-head"><h3>Contato</h3></div>
+          ${info.length ? `<table class="table"><tbody>${info.map(([k, v]) => `<tr><td class="muted" style="width:38%">${k}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">Sem dados de contato. Use Editar para completar.</p>'}
+          ${c.observacoes ? `<p class="small" style="margin-top:12px;white-space:pre-wrap">${esc(c.observacoes)}</p>` : ''}
+        </section>
+        <section class="panel">${painelDocs('cliente', c.id, c.drive_folder_id, 'Documentos do cliente', 'Documentos pessoais (RG, CPF, comprovantes). Cada processo tem uma subpasta própria aqui dentro.')}</section>
+      </div>
+    </div>`;
+}
+
+function linhaProcesso(k) {
+  const ps = parcelasDe(k.id);
+  const pend = sum(ps.filter(p => p.status !== 'paga'), p => p.valor);
+  const sub = [k.numero_processo ? 'Nº ' + k.numero_processo : '', k.orgao, k.andamento].filter(Boolean).join(', ') || 'Fechado em ' + fmtDate(k.data_fechamento);
+  return `<div class="item" role="button" tabindex="0" data-action="open-processo" data-id="${k.id}">
+    <span class="avatar">${ic('file').replace('<svg ', '<svg style="width:18px;height:18px" ')}</span>
+    <div class="grow"><div class="t">${esc(produtoNome(k.produto_id))} ${statusProcBadge(k)}</div><div class="s">${esc(sub)}</div></div>
+    <div class="v"><b>${brl(k.valor_total)}</b><div class="small muted">${k.status === 'cancelado' ? '' : pend ? brl(pend) + ' a receber' : 'quitado'}</div></div>
+  </div>`;
+}
+
+function vProcesso() {
+  const k = byId('contratos', S.sel.processo);
+  if (!k) return notFound('Processo');
+  const c = byId('clientes', k.cliente_id) || { nome: 'Cliente removido' };
+  loadFiles('processo', k.id, false);
+  const ps = parcelasDe(k.id);
+  const pagas = ps.filter(p => p.status === 'paga');
+  const pend = ps.filter(p => p.status !== 'paga');
+  const prox = pend.filter(p => p.vencimento).sort((a, b) => a.vencimento.localeCompare(b.vencimento))[0];
+  const wa = waLink(c.whatsapp);
+  const dados = [
+    ['Nº do processo', k.numero_processo], ['Órgão', k.orgao], ['Fase atual', k.andamento],
+    ['Fechado em', fmtDate(k.data_fechamento)], ['Pagamento', formaLabel(k.forma_pagamento)], ['De onde veio', campanhaNome(k.campanha_id)]
+  ];
+  return `${crumbs([{ label: 'Clientes', action: 'go', route: 'clientes' }, { label: c.nome, action: 'open-cliente', id: c.id }, { label: produtoNome(k.produto_id) }])}
+    <header class="page-head">
+      <span class="avatar avatar-lg">${ic('file').replace('<svg ', '<svg style="width:24px;height:24px" ')}</span>
+      <div class="grow"><h1>${esc(produtoNome(k.produto_id))}</h1>
+        <p class="muted"><button class="btn-text btn" style="padding:0" type="button" data-action="open-cliente" data-id="${c.id}">${esc(c.nome)}</button> ${statusProcBadge(k)}</p></div>
+      <div class="row wrap">
+        ${wa ? `<a class="btn btn-ghost wa" href="${wa}" target="_blank" rel="noopener">${ic('wa')}WhatsApp</a>` : ''}
+        <button class="btn btn-primary" type="button" data-action="edit" data-what="contrato" data-id="${k.id}">${ic('edit')}Editar processo</button>
+      </div>
+    </header>
+    <div class="kpis kpis-3">
+      <div class="kpi"><p>Honorários</p><strong>${brl(k.valor_total)}</strong><span>${formaLabel(k.forma_pagamento)}${ps.length > 1 ? `, ${ps.length} parcelas` : ''}</span></div>
+      <div class="kpi"><p>Recebido</p><strong>${brl(sum(pagas, p => p.valor))}</strong><span>${plural(pagas.length, 'parcela', 'parcelas')}</span></div>
+      <div class="kpi"><p>A receber</p><strong>${brl(sum(pend, p => p.valor))}</strong><span>${prox ? 'próxima em ' + fmtDate(prox.vencimento) : pend.length ? 'sem data definida' : 'nada pendente'}</span></div>
+    </div>
+    <div class="grid g-wide" style="margin-top:20px">
+      <div class="stack">
+        <section class="panel">
+          <div class="panel-head"><h3>Parcelas</h3><button class="btn btn-text btn-sm" type="button" data-action="edit" data-what="contrato" data-id="${k.id}">Ajustar parcelas</button></div>
+          ${ps.length ? `<div class="list">${ps.map(p => `<div class="item static">
+              <div class="grow"><div class="t">${ps.length > 1 ? 'Parcela ' + p.numero : 'Pagamento'}</div><div class="s">${esc(p.condicao || '')}</div></div>
+              <div class="v"><b>${brl(p.valor)}</b><div class="small ${statusParcela(p) === 'atrasada' ? 'late-date' : 'muted'}">${p.status === 'paga' && p.data_pagamento ? 'recebida em ' + fmtDate(p.data_pagamento) : ({ atrasada: 'venceu ', estimada: 'previsto ' }[statusParcela(p)] || '') + fmtDate(p.vencimento)}</div></div>
+              ${badgeParcela(p)}${toggleBtn(p)}</div>`).join('')}</div>` : '<p class="muted small">Sem parcelas. Use Editar processo para gerar.</p>'}
+        </section>
+        <section class="panel">${painelDocs('processo', k.id, k.drive_folder_id, 'Documentos do processo', 'Subpasta deste processo, dentro da pasta do cliente no Drive.')}</section>
+      </div>
+      <section class="panel">
+        <div class="panel-head"><h3>Dados do processo</h3></div>
+        <table class="table"><tbody>${dados.map(([a, b]) => `<tr><td class="muted" style="width:42%">${a}</td><td>${b ? esc(b) : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table>
+        ${k.observacoes ? `<p class="small" style="margin-top:12px;white-space:pre-wrap">${esc(k.observacoes)}</p>` : ''}
+      </section>
+    </div>`;
+}
+
+// ------------------------------------------------------------ documentos ---
+const EXT = (f) => {
+  if (f.isFolder) return ['folder', ''];
+  const m = f.mime || '';
+  const ext = (f.name.split('.').length > 1 ? f.name.split('.').pop() : '').toLowerCase().slice(0, 4);
+  if (m.indexOf('pdf') >= 0) return ['pdf', 'pdf'];
+  if (m.indexOf('image/') === 0) return ['img', ext || 'img'];
+  if (/document|word|text/.test(m)) return ['doc', ext || 'doc'];
+  if (/sheet|excel|csv/.test(m)) return ['sheet', ext || 'xls'];
+  return ['', ext || 'arq'];
+};
+const fkey = (kind, id) => kind + ':' + id;
+function painelDocs(kind, id, folderId, title, help) {
+  const st = S.files[fkey(kind, id)] || {};
+  const folderUrl = st.folder ? st.folder.url : (folderId ? 'https://drive.google.com/drive/folders/' + folderId : '');
+  let list;
+  if (st.loading && !st.items) list = '<div class="progress"><i></i></div><p class="small muted" style="margin-top:8px">Lendo a pasta no Drive…</p>';
+  else if (st.error) list = `<p class="small" style="color:var(--color-primary)">${esc(st.error)}</p>`;
+  else if (st.items && !st.items.length) list = '<p class="small muted">A pasta está vazia. Envie documentos abaixo ou direto pelo Google Drive.</p>';
+  else if (st.items) list = `<div class="files">${st.items.map(f => {
+    const [cls, lab] = EXT(f);
+    const proc = f.isFolder ? T('contratos').find(k => k.drive_folder_id === f.id) : null;
+    const meta = f.isFolder ? (proc ? 'Pasta do processo' : 'Pasta') : [fmtSize(f.size), 'alterado em ' + fmtDate(f.updated.slice(0, 10))].filter(Boolean).join(', ');
+    const attrs = proc ? `href="#" data-action="open-processo" data-id="${proc.id}"` : `href="${esc(f.url)}" target="_blank" rel="noopener"`;
+    return `<a class="file" ${attrs}><span class="ext ${cls}">${f.isFolder ? ic('drive') : esc(lab)}</span><span class="grow"><span class="t" style="display:block">${esc(f.name)}</span><span class="s">${meta}</span></span></a>`;
+  }).join('')}</div>`;
+  else list = '';
+  return `<div class="panel-head" style="margin-bottom:6px"><h3>${title}</h3>
+      <span class="row" style="gap:6px">
+        <button class="icon-btn" type="button" data-action="files-refresh" data-kind="${kind}" data-id="${id}" aria-label="Atualizar lista do Drive" title="Atualizar">${ic('refresh')}</button>
+        ${folderUrl ? `<a class="btn btn-ghost btn-sm" href="${esc(folderUrl)}" target="_blank" rel="noopener">${ic('drive')}Abrir no Drive</a>` : ''}
+      </span></div>
+    ${help ? `<p class="small muted" style="margin-bottom:12px">${help}</p>` : ''}
+    ${st.loading && st.items ? '<div class="progress" style="margin-bottom:8px"><i></i></div>' : ''}
+    ${list}
+    <label class="drop" style="margin-top:14px">
+      <input type="file" multiple data-upload="${id}" data-kind="${kind}">
+      ${st.uploading ? `Enviando ${plural(st.uploading, 'arquivo', 'arquivos')}…<div class="progress"><i></i></div>` : `${ic('upload').replace('<svg ', '<svg style="width:20px;height:20px;vertical-align:-4px;margin-right:6px" ')}Enviar documentos para esta pasta`}
+    </label>
+    <p class="small muted" style="margin-top:10px">O que for adicionado ou alterado direto no Drive aparece aqui ao atualizar. <button class="btn btn-text btn-sm" type="button" data-action="link-folder" data-kind="${kind}" data-id="${id}">${ic('link')}Usar uma pasta que já existe</button></p>`;
+}
+function loadFiles(kind, id, force) {
+  const st = S.files[fkey(kind, id)] = S.files[fkey(kind, id)] || {};
+  if (st.loading || ((st.items || st.error) && !force)) return;
+  st.loading = true; st.error = '';
+  if (force) rerender();
+  call('api_listFiles', kind, id).then(r => {
+    st.items = r.items; st.folder = r.folder;
+    if (r.record) upsertLocal(r.record.table, r.record.data);
+  }).catch(err => { st.error = 'Não consegui ler a pasta no Drive: ' + err.message; })
+    .finally(() => { st.loading = false; rerender(); });
+}
+const MAX_UPLOAD = 25 * 1024 * 1024;
+function uploadFiles(kind, id, fileList) {
+  const st = S.files[fkey(kind, id)] = S.files[fkey(kind, id)] || {};
+  Array.from(fileList).forEach(file => {
+    if (file.size > MAX_UPLOAD) { toast(`"${file.name}" tem mais de 25 MB. Envie esse pelo Google Drive, direto na pasta.`, true); return; }
+    st.uploading = (st.uploading || 0) + 1; rerender();
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = String(reader.result).split(',')[1];
+      call('api_upload', kind, id, { name: file.name, mime: file.type || 'application/octet-stream', data })
+        .then(item => { st.items = [item].concat((st.items || []).filter(f => f.id !== item.id)); toast('Enviado para o Drive: ' + file.name); })
+        .catch(err => toast('Falha ao enviar ' + file.name + ': ' + err.message, true))
+        .finally(() => { st.uploading--; rerender(); });
+    };
+    reader.onerror = () => { st.uploading--; toast('Não consegui ler ' + file.name, true); rerender(); };
+    reader.readAsDataURL(file);
+  });
+}
+function linkFolder(kind, id) {
+  if ($('#lf')) { $('#lf').focus(); return; }
+  const box = document.createElement('div');
+  box.className = 'box'; box.style.marginTop = '10px';
+  box.innerHTML = `<div class="field"><label for="lf">Link da pasta no Google Drive</label><input id="lf" placeholder="https://drive.google.com/drive/folders/…"></div>
+    <div class="row" style="margin-top:10px"><button class="btn btn-primary btn-sm" type="button" id="lf-ok">Vincular pasta</button><button class="btn btn-text btn-sm" type="button" id="lf-no">Cancelar</button></div>`;
+  const anchor = $(`[data-action="link-folder"][data-kind="${kind}"][data-id="${id}"]`).closest('p');
+  anchor.after(box); $('#lf').focus();
+  $('#lf-no').onclick = () => box.remove();
+  $('#lf-ok').onclick = () => {
+    const v = $('#lf').value.trim();
+    if (!v) return;
+    $('#lf-ok').disabled = true;
+    call('api_linkFolder', kind, id, v).then(r => {
+      upsertLocal(r.table, r.data); S.files[fkey(kind, id)] = {}; loadFiles(kind, id, true); toast('Pasta vinculada.');
+    }).catch(err => { toast(err.message, true); $('#lf-ok').disabled = false; });
+  };
+}
+
+// ---------------------------------------------------------- form cliente ---
+function formCliente(id) {
+  const c = id ? Object.assign({}, byId('clientes', id)) : { status: 'ativo' };
+  openDrawer(() => ({
+    title: id ? 'Editar cliente' : 'Novo cliente',
+    sub: id ? '' : 'Uma pasta com o nome do cliente é criada no seu Google Drive.',
+    body: `<form class="form" id="fm" autocomplete="off">
+      ${field('nome', 'Nome completo', 'text', c.nome, { full: true, required: true, autofocus: true })}
+      ${field('whatsapp', 'WhatsApp', 'tel', c.whatsapp, { placeholder: '(34) 99999-9999' })}
+      ${field('email', 'E-mail', 'email', c.email)}
+      ${field('cidade', 'Cidade', 'text', c.cidade)}
+      ${field('origem', 'Como chegou até você', 'select', c.origem, { options: [['', 'Não sei']].concat(optList('origens')) })}
+      ${field('campanha_id', 'Campanha ou origem', 'select', c.campanha_id, { options: optOrigem(), full: true })}
+      <div class="field full"><label>Situação</label>${seg('status', c.status || 'ativo', STATUS_CLIENTE)}</div>
+      ${field('observacoes', 'Observações', 'textarea', c.observacoes, { full: true })}
+    </form>`,
+    foot: `${id ? `<button class="btn btn-danger" type="button" data-action="del" data-what="cliente" data-id="${id}">Excluir</button>` : ''}<span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-action="close">Cancelar</button>
+      <button class="btn btn-primary" type="button" data-action="submit-cliente" data-id="${id || ''}">${id ? 'Salvar alterações' : 'Cadastrar cliente'}</button>`
+  }));
+}
+function submitCliente(id) {
+  const fm = $('#fm'), v = readForm(fm);
+  if (!v.nome) return invalid(fm.nome, 'Informe o nome do cliente.');
+  const base = id ? byId('clientes', id) : { id: uid(), drive_folder_id: '' };
+  const rec = Object.assign({}, base, v);
+  save('clientes', rec);
+  toast(id ? 'Cliente atualizado.' : 'Cliente cadastrado.');
+  closeDrawer();
+  openCliente(rec.id);
+}
+
+/* =========================================================================
+   CONTRATOS
+   ========================================================================= */
+const FORMAS = [['avista', 'À vista'], ['parcelado', 'Parcelado'], ['evento', 'Depende de evento']];
+const formaLabel = f => (FORMAS.find(x => x[0] === f) || ['', '—'])[1];
+const STATUS_CONTRATO = [['ativo', 'Em andamento'], ['concluido', 'Concluído'], ['cancelado', 'Cancelado']];
+
+function vContratos() {
+  const list = T('contratos').slice().sort((a, b) => (b.data_fechamento || '').localeCompare(a.data_fechamento || ''));
+  if (!list.length) return `<div class="panel empty"><h3>Nenhum processo ainda</h3><p>Cadastre o processo com os honorários e a forma de pagamento. As parcelas entram sozinhas nos recebíveis.</p>
+    <button class="btn btn-primary" type="button" data-action="new" data-what="contrato">${ic('plus')}Cadastrar processo</button></div>`;
+  const q = norm(S.q);
+  const f = q ? list.filter(k => norm(clienteNome(k.cliente_id) + ' ' + produtoNome(k.produto_id)).indexOf(q) >= 0) : list;
+  const val = f.filter(contratoValido);
+  return `<div class="toolbar">
+      <input class="search" type="search" placeholder="Buscar por cliente ou serviço" value="${esc(S.q)}" data-input="q" aria-label="Buscar contratos">
+      <button class="btn btn-ghost" type="button" data-action="new" data-what="contrato">${ic('plus')}Novo processo</button>
+      <span class="total-line">${plural(val.length, 'processo', 'processos')}, <b>${brl(sum(val, k => k.valor_total))}</b></span>
+    </div>
+    <section class="panel">
+    <table class="table resp"><thead><tr><th>Cliente</th><th>Serviço</th><th>Nº do processo</th><th>Fechado em</th><th>Pagamento</th><th class="r">Valor</th><th class="r">A receber</th></tr></thead><tbody>
+    ${f.map(k => {
+      const ps = parcelasDe(k.id);
+      const pend = sum(ps.filter(p => p.status !== 'paga'), p => p.valor);
+      const st = k.status === 'cancelado' ? ' <span class="badge b-mute">Cancelado</span>' : k.status === 'concluido' ? ' <span class="badge b-ok">Concluído</span>' : '';
+      return `<tr class="click" data-action="open-processo" data-id="${k.id}">
+        <td data-l="Cliente"><b>${esc(clienteNome(k.cliente_id))}</b>${st}</td>
+        <td data-l="Serviço">${esc(produtoNome(k.produto_id))}</td>
+        <td data-l="Nº do processo" class="num">${esc(k.numero_processo || '—')}</td>
+        <td data-l="Fechado em" class="num">${fmtDate(k.data_fechamento)}</td>
+        <td data-l="Pagamento">${formaLabel(k.forma_pagamento)}${ps.length > 1 ? ` (${ps.length}×)` : ''}</td>
+        <td data-l="Valor" class="r num">${brl(k.valor_total)}</td>
+        <td data-l="A receber" class="r num">${k.status === 'cancelado' ? '—' : pend ? brl(pend) : '<span class="badge b-ok">Quitado</span>'}</td></tr>`;
+    }).join('')}</tbody></table></section>`;
+}
+
+function formContrato(id, preCliente) {
+  const k = id ? Object.assign({}, byId('contratos', id)) : {
+    id: uid(), cliente_id: preCliente || '', produto_id: '', data_fechamento: today(),
+    valor_total: null, forma_pagamento: 'parcelado', status: 'ativo', campanha_id: preCliente ? ((byId('clientes', preCliente) || {}).campanha_id || '') : ''
+  };
+  S.form = {
+    id: k.id, isNew: !id,
+    forma: k.forma_pagamento || 'parcelado',
+    parcelas: id ? parcelasDe(id).map(p => Object.assign({}, p)) : [],
+    novoCliente: false, novoProduto: false
+  };
+  const produtos = T('produtos').filter(p => p.ativo !== false || p.id === k.produto_id);
+  const cliOpts = [['', 'Escolha o cliente']].concat(T('clientes').slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => [c.id, c.nome])).concat([['__novo', '+ Cadastrar cliente novo']]);
+  const prodOpts = [['', 'Escolha o serviço']].concat(produtos.map(p => [p.id, p.nome])).concat([['__novo', '+ Cadastrar serviço novo']]);
+  const d1 = addMonths(today(), 1);
+
+  openDrawer(() => ({
+    title: id ? 'Editar processo' : 'Novo processo',
+    sub: id ? esc(clienteNome(k.cliente_id)) : 'Dados do processo, honorários e parcelas. As parcelas vão direto para os recebíveis.',
+    body: `<form class="form" id="fm" autocomplete="off">
+      ${field('cliente_id', 'Cliente', 'select', k.cliente_id, { options: cliOpts, full: true })}
+      <div class="field full box" id="novo-cli" hidden>
+        <div class="form">
+          ${field('nc_nome', 'Nome do cliente novo', 'text', '', { full: true })}
+          ${field('nc_whatsapp', 'WhatsApp', 'tel', '', { placeholder: '(34) 99999-9999' })}
+          ${field('nc_origem', 'Como chegou', 'select', '', { options: [['', 'Não sei']].concat(optList('origens')) })}
+        </div>
+      </div>
+      ${field('produto_id', 'Serviço', 'select', k.produto_id, { options: prodOpts, full: true })}
+      <div class="field full box" id="novo-prod" hidden>
+        <div class="form">
+          ${field('np_nome', 'Nome do serviço', 'text', '', { placeholder: 'Ex.: Inventário extrajudicial' })}
+          ${field('np_area', 'Área', 'select', '', { options: optList('areas') })}
+        </div>
+      </div>
+      ${field('numero_processo', 'Nº do processo', 'text', k.numero_processo, { placeholder: 'Opcional, se já existir' })}
+      ${field('orgao', 'Órgão', 'text', k.orgao, { placeholder: 'Ex.: 2ª Vara de Família, Cartório, INSS' })}
+      ${field('andamento', 'Fase atual', 'text', k.andamento, { full: true, placeholder: 'Ex.: Petição protocolada' })}
+      ${field('campanha_id', 'De onde veio', 'select', k.campanha_id, { options: optOrigem(), full: true, hint: 'Orgânico, indicação ou a campanha que trouxe este cliente.' })}
+      ${field('data_fechamento', 'Data em que fechou', 'date', k.data_fechamento)}
+      ${field('valor_total', 'Valor total dos honorários', 'money', k.valor_total, { required: true })}
+      ${id ? `<div class="field full"><label>Situação</label>${seg('status', k.status || 'ativo', STATUS_CONTRATO)}</div>` : ''}
+      <div class="field full"><label>Forma de pagamento</label>${seg('forma_pagamento', S.form.forma, FORMAS)}</div>
+      <div class="field full box" id="gerador">
+        <div class="form" data-forma="avista">
+          ${field('g_av_data', 'Data do pagamento', 'date', k.data_fechamento || today(), { full: true })}
+        </div>
+        <div class="form" data-forma="parcelado">
+          ${field('g_entrada', 'Entrada (opcional)', 'money', null)}
+          ${field('g_entrada_data', 'Data da entrada', 'date', k.data_fechamento || today())}
+          ${field('g_n', 'Número de parcelas', 'number', 3)}
+          ${field('g_d1', 'Vencimento da 1ª parcela', 'date', d1)}
+        </div>
+        <div class="form" data-forma="evento">
+          ${field('g_ev_cond', 'Paga quando', 'text', 'Nascimento do bebê', { full: true, hint: 'Ex.: nascimento do bebê, sentença, liberação do benefício.' })}
+          ${field('g_ev_data', 'Data prevista', 'date', addMonths(today(), 3), { hint: 'Ex.: data prevista do parto.' })}
+          ${field('g_ev_n', 'Em quantas vezes', 'number', 1)}
+        </div>
+        <div class="row" style="margin-top:12px"><button class="btn btn-ghost btn-sm" type="button" data-action="gerar">${ic('refresh')}${id ? 'Recalcular parcelas' : 'Gerar parcelas'}</button>
+          <span class="small muted" id="gerar-hint"></span></div>
+      </div>
+      <div class="field full" id="parc-box"></div>
+      ${field('observacoes', 'Observações', 'textarea', k.observacoes, { full: true })}
+    </form>`,
+    foot: `${id ? `<button class="btn btn-danger" type="button" data-action="del" data-what="contrato" data-id="${id}">Excluir</button>` : ''}<span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-action="close">Cancelar</button>
+      <button class="btn btn-primary" type="button" data-action="submit-contrato" data-id="${id || ''}">${id ? 'Salvar alterações' : 'Salvar processo'}</button>`,
+    mount: root => {
+      const fm = $('#fm', root);
+      fm.cliente_id.onchange = () => {
+        $('#novo-cli').hidden = fm.cliente_id.value !== '__novo';
+        if (fm.cliente_id.value === '__novo') fm.nc_nome.focus();
+        const cli = byId('clientes', fm.cliente_id.value);
+        if (cli && cli.campanha_id && !fm.campanha_id.value) fm.campanha_id.value = cli.campanha_id;
+      };
+      fm.produto_id.onchange = () => {
+        $('#novo-prod').hidden = fm.produto_id.value !== '__novo';
+        if (fm.produto_id.value === '__novo') fm.np_nome.focus();
+        const p = byId('produtos', fm.produto_id.value);
+        if (p && p.valor_referencia && !parseMoney(fm.valor_total.value)) fm.valor_total.value = moneyIn(p.valor_referencia);
+      };
+      showForma();
+      paintParcelas();
+    }
+  }));
+}
+function showForma() {
+  document.querySelectorAll('#gerador [data-forma]').forEach(el => { el.hidden = el.dataset.forma !== S.form.forma; });
+  const pagas = S.form.parcelas.filter(p => p.status === 'paga');
+  $('#gerar-hint').textContent = pagas.length ? `As ${plural(pagas.length, 'parcela já recebida é mantida', 'parcelas já recebidas são mantidas')}.` : '';
+}
+function gerarParcelas() {
+  const fm = $('#fm');
+  const total = parseMoney(fm.valor_total.value);
+  if (!total) return invalid(fm.valor_total, 'Informe o valor total antes de gerar as parcelas.');
+  const pagas = S.form.parcelas.filter(p => p.status === 'paga');
+  let resto = Math.round((total - sum(pagas, p => p.valor)) * 100) / 100;
+  if (resto <= 0) { toast('O contrato já está todo recebido.'); return; }
+  const novas = [];
+  const mk = (valor, venc, tipo, cond) => ({ id: uid(), contrato_id: S.form.id, numero: 0, valor, vencimento: venc, tipo, condicao: cond || '', status: 'pendente', data_pagamento: '' });
+  const split = (valor, n) => {
+    const base = Math.floor(valor / n * 100) / 100;
+    const arr = Array(n).fill(base);
+    arr[n - 1] = Math.round((valor - base * (n - 1)) * 100) / 100;
+    return arr;
+  };
+  if (S.form.forma === 'avista') {
+    novas.push(mk(resto, fm.g_av_data.value, 'fixa'));
+  } else if (S.form.forma === 'parcelado') {
+    const ent = parseMoney(fm.g_entrada.value) || 0;
+    const n = Math.max(1, parseInt(fm.g_n.value, 10) || 1);
+    if (ent > 0 && !pagas.length) { novas.push(mk(Math.min(ent, resto), fm.g_entrada_data.value, 'fixa', 'Entrada')); resto = Math.round((resto - Math.min(ent, resto)) * 100) / 100; }
+    if (resto > 0) split(resto, n).forEach((v, i) => novas.push(mk(v, addMonths(fm.g_d1.value || addMonths(today(), 1), i), 'fixa')));
+  } else {
+    const n = Math.max(1, parseInt(fm.g_ev_n.value, 10) || 1);
+    const cond = fm.g_ev_cond.value.trim();
+    const d = fm.g_ev_data.value;
+    split(resto, n).forEach((v, i) => novas.push(mk(v, d ? addMonths(d, i) : '', 'estimada', i === 0 ? cond : (cond ? cond + ` (+${i} ${i === 1 ? 'mês' : 'meses'})` : ''))));
+  }
+  S.form.parcelas = pagas.concat(novas);
+  renumber();
+  paintParcelas();
+}
+function renumber() {
+  S.form.parcelas.sort((a, b) => (a.status === 'paga') === (b.status === 'paga') ? (a.vencimento || '9').localeCompare(b.vencimento || '9') : (a.status === 'paga' ? -1 : 1));
+  S.form.parcelas.forEach((p, i) => { p.numero = i + 1; });
+}
+function paintParcelas() {
+  const box = $('#parc-box');
+  if (!box) return;
+  const ps = S.form.parcelas;
+  const total = parseMoney($('#fm').valor_total.value) || 0;
+  const soma = Math.round(sum(ps, p => p.valor) * 100) / 100;
+  const diff = Math.round((total - soma) * 100) / 100;
+  if (!ps.length) { box.innerHTML = '<p class="small muted">Nenhuma parcela ainda. Escolha a forma de pagamento e toque em gerar parcelas.</p>'; return; }
+  box.innerHTML = `<label>Parcelas <span class="hint">(dá para ajustar valor, data e observação)</span></label>
+    <table class="parc-table"><thead><tr><th style="width:34px">Nº</th><th>Vencimento</th><th style="width:30%">Valor</th><th>Observação</th><th style="width:34px"></th></tr></thead><tbody>
+    ${ps.map((p, i) => `<tr>
+      <td class="num">${p.numero}</td>
+      <td><input type="date" value="${esc(p.vencimento)}" data-pi="${i}" data-pf="vencimento" ${p.status === 'paga' ? 'disabled' : ''}></td>
+      <td><input inputmode="decimal" value="${esc(moneyIn(p.valor))}" data-pi="${i}" data-pf="valor" placeholder="Valor" ${p.status === 'paga' ? 'disabled' : ''}></td>
+      <td>${p.status === 'paga' ? '<span class="badge b-ok">Recebida</span>' : `<input value="${esc(p.condicao)}" data-pi="${i}" data-pf="condicao" placeholder="${p.tipo === 'estimada' ? 'Paga quando' : 'Observação'}">`}</td>
+      <td>${p.status === 'paga' ? '' : `<button class="icon-btn" type="button" style="width:30px;height:30px" data-action="parc-del" data-i="${i}" aria-label="Remover parcela">${ic('x')}</button>`}</td>
+    </tr>`).join('')}</tbody></table>
+    <div class="row spread"><button class="btn btn-text btn-sm" type="button" data-action="parc-add">${ic('plus')}Adicionar parcela</button>
+    <p class="diff ${Math.abs(diff) > 0.009 ? 'bad' : 'muted'}">Soma das parcelas: ${brl(soma)}${Math.abs(diff) > 0.009 ? `, ${diff > 0 ? 'faltam' : 'sobram'} ${brl(Math.abs(diff))} em relação ao total` : ''}</p></div>`;
+}
+function submitContrato(id) {
+  const fm = $('#fm'), v = readForm(fm);
+  // Cliente
+  let clienteId = v.cliente_id;
+  if (clienteId === '__novo') {
+    if (!v.nc_nome) return invalid(fm.nc_nome, 'Informe o nome do cliente novo.');
+    const novo = { id: uid(), nome: v.nc_nome, whatsapp: v.nc_whatsapp, origem: v.nc_origem, campanha_id: v.campanha_id, status: 'ativo', drive_folder_id: '' };
+    save('clientes', novo);
+    clienteId = novo.id;
+  }
+  if (!clienteId) return invalid(fm.cliente_id, 'Escolha o cliente.');
+  // Produto
+  let produtoId = v.produto_id;
+  if (produtoId === '__novo') {
+    if (!v.np_nome) return invalid(fm.np_nome, 'Informe o nome do serviço.');
+    const np = { id: uid(), nome: v.np_nome, area: v.np_area, valor_referencia: null, ativo: true };
+    save('produtos', np);
+    produtoId = np.id;
+  }
+  if (!produtoId) return invalid(fm.produto_id, 'Escolha o serviço.');
+  if (!v.valor_total) return invalid(fm.valor_total, 'Informe o valor total.');
+  if (!S.form.parcelas.length) gerarParcelas();
+  if (!S.form.parcelas.length) return false;
+  if (S.form.parcelas.some(p => !p.valor)) return invalid(null, 'Há parcela sem valor. Corrija ou remova.');
+
+  const base = id ? byId('contratos', id) : {};
+  const c = Object.assign({}, base, {
+    id: S.form.id, cliente_id: clienteId, produto_id: produtoId, data_fechamento: v.data_fechamento,
+    valor_total: v.valor_total, forma_pagamento: v.forma_pagamento, status: v.status || base.status || 'ativo',
+    campanha_id: v.campanha_id, observacoes: v.observacoes,
+    numero_processo: v.numero_processo, orgao: v.orgao, andamento: v.andamento, drive_folder_id: base.drive_folder_id || ''
+  });
+  const cli = byId('clientes', clienteId);
+  if (cli && cli.status === 'lead') save('clientes', Object.assign({}, cli, { status: 'ativo' }));
+  const parcelas = S.form.parcelas.map(p => Object.assign({}, p, { contrato_id: c.id }));
+  saveContrato(c, parcelas);
+  toast(id ? 'Processo atualizado.' : 'Processo salvo. As parcelas já estão nos recebíveis.');
+  closeDrawer();
+  openProcesso(c.id);
+}
+
+/* =========================================================================
+   RECEBÍVEIS
+   ========================================================================= */
+function vRecebiveis() {
+  const t = today();
+  let ps = T('parcelas').filter(parcelaAtiva);
+  const modo = S.rec.modo;
+  if (modo === 'pendentes') ps = ps.filter(p => p.status !== 'paga');
+  if (modo === 'pagas') ps = ps.filter(p => p.status === 'paga');
+  const mes = S.rec.mes;
+  if (mes === 'late') ps = ps.filter(p => p.status !== 'paga' && p.vencimento && p.vencimento < t);
+  else if (mes === 'depois') { const lim = monthKey(addMonths(t.slice(0, 8) + '01', 11)); ps = ps.filter(p => !p.vencimento || monthKey(p.vencimento) > lim); }
+  else if (mes) ps = ps.filter(p => monthKey(p.status === 'paga' ? (p.data_pagamento || p.vencimento) : p.vencimento) === mes);
+
+  const dateOf = p => p.status === 'paga' ? (p.data_pagamento || p.vencimento) : p.vencimento;
+  ps.sort((a, b) => modo === 'pagas' ? (dateOf(b) || '').localeCompare(dateOf(a) || '') : (dateOf(a) || '9').localeCompare(dateOf(b) || '9'));
+  const groups = [];
+  ps.forEach(p => {
+    const k = monthKey(dateOf(p));
+    let g = groups.find(x => x.k === k);
+    if (!g) { g = { k, items: [] }; groups.push(g); }
+    g.items.push(p);
+  });
+  const filtroMes = mes ? `<button class="chip" type="button" aria-pressed="true" data-action="rec-month" data-key="">${mes === 'late' ? 'Só atrasadas' : mes === 'depois' ? 'Depois de 12 meses' : esc(monthLabel(mes))} ${ic('x').replace('<svg ', '<svg style="width:12px;height:12px;vertical-align:-1px" ')}</button>` : '';
+  const empty = !T('parcelas').length
+    ? `<div class="panel empty"><h3>Nada a receber ainda</h3><p>As parcelas aparecem aqui quando você cadastra um processo.</p><button class="btn btn-primary" type="button" data-action="new" data-what="contrato">${ic('plus')}Cadastrar processo</button></div>`
+    : '<div class="panel empty"><p>Nenhuma parcela com esse filtro.</p></div>';
+  return `<div class="toolbar">
+      <div class="period">${[['pendentes', 'A receber'], ['pagas', 'Recebidas'], ['todas', 'Todas']].map(([v, l]) => `<button type="button" class="chip" data-action="rec-modo" data-v="${v}" aria-pressed="${modo === v}">${l}</button>`).join('')}${filtroMes}</div>
+      <span class="total-line">${plural(ps.length, 'parcela', 'parcelas')}, <b>${brl(sum(ps, p => p.valor))}</b></span>
+    </div>
+    ${groups.length ? `<section class="panel">${groups.map(g => `<div class="month-group">
+        <div class="month-head"><h3>${esc(monthLabel(g.k))}</h3><b class="num">${brl(sum(g.items, p => p.valor))}</b></div>
+        <div class="list">${g.items.map(p => linhaParcela(p)).join('')}</div></div>`).join('')}</section>` : empty}`;
+}
+function togglePaga(id) {
+  const p = byId('parcelas', id);
+  if (!p) return;
+  const paga = p.status === 'paga';
+  save('parcelas', Object.assign({}, p, { status: paga ? 'pendente' : 'paga', data_pagamento: paga ? '' : today() }));
+  toast(paga ? 'Recebimento desmarcado.' : `Recebida: ${brl(p.valor)}.`);
+}
+
+/* =========================================================================
+   GASTOS
+   ========================================================================= */
+function vGastos() {
+  const all = T('gastos');
+  if (!all.length) return `<div class="panel empty"><h3>Nenhum gasto lançado</h3><p>Mentorias, cursos, softwares e anúncios. Ligue o gasto a uma campanha para saber quanto cada uma retorna.</p>
+    <button class="btn btn-primary" type="button" data-action="new" data-what="gasto">${ic('plus')}Lançar gasto</button></div>`;
+  const r = rangeOf(S.gasto.periodo);
+  let list = all.filter(g => inRange(g.data, r) || (S.gasto.periodo === 'tudo'));
+  const cats = [...new Set(list.map(g => g.categoria || 'Outro'))].sort();
+  if (S.gasto.cat) list = list.filter(g => (g.categoria || 'Outro') === S.gasto.cat);
+  list.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  const contrPer = T('contratos').filter(k => contratoValido(k) && (S.gasto.periodo === 'tudo' || inRange(k.data_fechamento, r)));
+  const resumo = list.length ? `<section class="panel" style="margin-bottom:20px">
+      <div class="panel-head"><div><h3>Resumo</h3><p>${S.gasto.agrupar === 'servico' ? 'Quanto foi investido em cada área e serviço, e quanto voltou em processos no mesmo período.' : 'Quanto foi para cada tipo de gasto, aberto por área e serviço.'}</p></div>${segAgrupar()}</div>
+      ${tabelaArvore(list, S.gasto.agrupar, contrPer, false)}
+    </section>` : '';
+  const groups = [];
+  list.forEach(g => { const k = monthKey(g.data); let x = groups.find(y => y.k === k); if (!x) { x = { k, items: [] }; groups.push(x); } x.items.push(g); });
+  return `<div class="toolbar">
+      <div class="period">${PERIODOS.map(([v, l]) => `<button type="button" class="chip" data-action="gasto-periodo" data-v="${v}" aria-pressed="${S.gasto.periodo === v}">${l}</button>`).join('')}</div>
+      <span class="total-line">${plural(list.length, 'gasto', 'gastos')}, <b>${brl(sum(list, g => g.valor))}</b></span>
+    </div>
+    <div class="toolbar"><div class="period">
+      <button type="button" class="chip" data-action="gasto-cat" data-v="" aria-pressed="${!S.gasto.cat}">Todas as categorias</button>
+      ${cats.map(c => `<button type="button" class="chip" data-action="gasto-cat" data-v="${esc(c)}" aria-pressed="${S.gasto.cat === c}">${esc(c)}</button>`).join('')}
+    </div></div>
+    ${resumo}
+    ${groups.length ? `<section class="panel"><div class="panel-head"><h3>Lançamentos</h3></div>${groups.map(g => `<div class="month-group">
+      <div class="month-head"><h3>${esc(monthLabel(g.k))}</h3><b class="num">${brl(sum(g.items, x => x.valor))}</b></div>
+      <div class="list">${g.items.map(x => `<div class="item" role="button" tabindex="0" data-action="edit" data-what="gasto" data-id="${x.id}">
+        <div class="grow"><div class="t">${esc(x.descricao || x.categoria)}</div><div class="s">${esc([x.categoria, servicoDoGasto(x) ? areaDoServico(servicoDoGasto(x)) + ' / ' + produtoNome(servicoDoGasto(x)) : GERAL, campanhaNome(x.campanha_id), x.fornecedor].filter(Boolean).join(', '))}</div></div>
+        <div class="v"><b>${brl(x.valor)}</b><div class="small muted">${fmtDate(x.data)}</div></div></div>`).join('')}</div></div>`).join('')}</section>`
+      : '<div class="panel empty"><p>Nenhum gasto com esse filtro.</p></div>'}`;
+}
+function formGasto(id) {
+  const g = id ? byId('gastos', id) : { data: today(), categoria: (S.config.categorias_gasto || [])[0] };
+  openDrawer(() => ({
+    title: id ? 'Editar gasto' : 'Novo gasto',
+    body: `<form class="form" id="fm" autocomplete="off">
+      ${field('valor', 'Valor', 'money', g.valor, { required: true, autofocus: true })}
+      ${field('data', 'Data', 'date', g.data)}
+      ${field('categoria', 'Categoria', 'select', g.categoria, { options: optList('categorias_gasto'), full: true })}
+      ${field('descricao', 'Descrição', 'text', g.descricao, { full: true, placeholder: 'Ex.: Mentoria de posicionamento, parcela 2' })}
+      ${field('campanha_id', 'Campanha', 'select', g.campanha_id, { options: optCampanhas(), hint: 'Para anúncios, ligue à campanha.' })}
+      ${field('produto_id', 'Serviço relacionado', 'select', g.produto_id || ((byId('campanhas', g.campanha_id) || {}).produto_id || ''), { options: [['', GERAL]].concat(T('produtos').slice().sort((a, b) => (a.area || '').localeCompare(b.area || '') || a.nome.localeCompare(b.nome, 'pt-BR')).map(p => [p.id, (p.area ? p.area + ' / ' : '') + p.nome])), hint: 'Vem da campanha. Deixe em geral para mentorias e softwares.' })}
+      ${field('fornecedor', 'Fornecedor', 'text', g.fornecedor, { placeholder: 'Ex.: Meta, Google, nome da mentora' })}
+    </form>`,
+    mount: root => {
+      const fm = $('#fm', root);
+      fm.campanha_id.onchange = () => { const c = byId('campanhas', fm.campanha_id.value); if (c && c.produto_id) fm.produto_id.value = c.produto_id; };
+    },
+    foot: `${id ? `<button class="btn btn-danger" type="button" data-action="del" data-what="gasto" data-id="${id}">Excluir</button>` : ''}<span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-action="close">Cancelar</button>
+      <button class="btn btn-primary" type="button" data-action="submit-gasto" data-id="${id || ''}">${id ? 'Salvar alterações' : 'Lançar gasto'}</button>`
+  }));
+}
+function submitGasto(id, again) {
+  const fm = $('#fm'), v = readForm(fm);
+  if (!v.valor) return invalid(fm.valor, 'Informe o valor do gasto.');
+  if (!v.data) return invalid(fm.data, 'Informe a data.');
+  save('gastos', Object.assign({}, id ? byId('gastos', id) : { id: uid() }, v));
+  toast(id ? 'Gasto atualizado.' : 'Gasto lançado.');
+  closeDrawer();
+}
+
+/* =========================================================================
+   CAMPANHAS
+   ========================================================================= */
+const STATUS_CAMP = [['ativa', 'Ativa'], ['pausada', 'Pausada'], ['encerrada', 'Encerrada']];
+function vCampanhas() {
+  const list = T('campanhas').slice().sort((a, b) => (b.inicio || '').localeCompare(a.inicio || ''));
+  if (!list.length) return `<div class="panel empty"><h3>Nenhuma campanha cadastrada</h3><p>Cadastre suas campanhas do Meta e do Google. Depois, ao lançar gastos e processos, escolha a campanha para ver o retorno de cada uma.</p>
+    <button class="btn btn-primary" type="button" data-action="new" data-what="campanha">${ic('plus')}Cadastrar campanha</button></div>`;
+  return `<div class="stack">${list.map(c => {
+    const s = statsCampanha(c);
+    const st = { ativa: 'b-ok', pausada: 'b-plan', encerrada: 'b-mute' }[c.status || 'ativa'];
+    const per = [c.inicio ? fmtDate(c.inicio) : '', c.fim ? 'até ' + fmtDate(c.fim) : ''].filter(Boolean).join(' ');
+    return `<section class="panel" role="button" tabindex="0" style="cursor:pointer" data-action="edit" data-what="campanha" data-id="${c.id}">
+      <div class="panel-head"><div><h3>${esc(c.nome)}</h3><p>${esc([c.plataforma, c.produto_id ? produtoNome(c.produto_id) : '', per].filter(Boolean).join(', '))}</p></div>
+        <span class="badge ${st}">${(STATUS_CAMP.find(x => x[0] === (c.status || 'ativa')) || [])[1]}</span></div>
+      <div class="kpis" style="box-shadow:none;background:var(--color-background)">
+        <div class="kpi"><p>Investido</p><strong>${brl(s.gasto)}</strong>${c.orcamento ? `<span>de ${brl(c.orcamento)} previstos</span>` : ''}</div>
+        <div class="kpi"><p>Clientes</p><strong>${s.clientes}</strong></div>
+        <div class="kpi"><p>Processos</p><strong>${s.contratos}</strong></div>
+        <div class="kpi"><p>Contratado</p><strong>${brl(s.valor)}</strong></div>
+        <div class="kpi"><p>Custo por processo</p><strong>${s.contratos ? brl(s.gasto / s.contratos) : '—'}</strong></div>
+      </div></section>`;
+  }).join('')}</div>`;
+}
+function formCampanha(id) {
+  const c = id ? byId('campanhas', id) : { status: 'ativa', inicio: today(), plataforma: (S.config.plataformas || [])[0] };
+  openDrawer(() => ({
+    title: id ? 'Editar campanha' : 'Nova campanha',
+    body: `<form class="form" id="fm" autocomplete="off">
+      ${field('nome', 'Nome da campanha', 'text', c.nome, { full: true, required: true, autofocus: true, placeholder: 'Ex.: Divórcio consensual, novembro' })}
+      ${field('plataforma', 'Plataforma', 'select', c.plataforma, { options: optList('plataformas') })}
+      ${field('produto_id', 'Serviço anunciado', 'select', c.produto_id, { options: [['', 'Vários ou nenhum']].concat(T('produtos').map(p => [p.id, p.nome])) })}
+      ${field('inicio', 'Início', 'date', c.inicio)}
+      ${field('fim', 'Fim', 'date', c.fim)}
+      ${field('orcamento', 'Orçamento previsto', 'money', c.orcamento)}
+      <div class="field"><label>Situação</label>${seg('status', c.status || 'ativa', STATUS_CAMP)}</div>
+      ${field('observacoes', 'Observações', 'textarea', c.observacoes, { full: true })}
+    </form>`,
+    foot: `${id ? `<button class="btn btn-danger" type="button" data-action="del" data-what="campanha" data-id="${id}">Excluir</button>` : ''}<span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-action="close">Cancelar</button>
+      <button class="btn btn-primary" type="button" data-action="submit-campanha" data-id="${id || ''}">${id ? 'Salvar alterações' : 'Cadastrar campanha'}</button>`
+  }));
+}
+function submitCampanha(id) {
+  const fm = $('#fm'), v = readForm(fm);
+  if (!v.nome) return invalid(fm.nome, 'Dê um nome à campanha.');
+  save('campanhas', Object.assign({}, id ? byId('campanhas', id) : { id: uid() }, v));
+  toast(id ? 'Campanha atualizada.' : 'Campanha cadastrada.');
+  closeDrawer();
+}
+
+/* =========================================================================
+   PRODUTOS E SERVIÇOS
+   ========================================================================= */
+function vProdutos() {
+  const areas = [...new Set(T('produtos').map(p => p.area || 'Outro'))];
+  const ordem = (S.config.areas || []).concat(areas.filter(a => (S.config.areas || []).indexOf(a) < 0));
+  const blocks = ordem.filter(a => areas.indexOf(a) >= 0).map(a => {
+    const ps = T('produtos').filter(p => (p.area || 'Outro') === a).sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
+    return `<div class="month-group"><div class="month-head"><h3>${esc(a)}</h3><span class="small muted">${plural(ps.length, 'serviço', 'serviços')}</span></div>
+      <div class="list">${ps.map(p => {
+        const ks = T('contratos').filter(k => k.produto_id === p.id && contratoValido(k));
+        return `<div class="item" role="button" tabindex="0" data-action="edit" data-what="produto" data-id="${p.id}">
+          <div class="grow"><div class="t">${esc(p.nome)} ${p.ativo === false ? '<span class="badge b-mute">Fora de oferta</span>' : ''}</div>
+          <div class="s">${p.valor_referencia ? 'Valor de referência ' + brl(p.valor_referencia) : 'Sem valor de referência'}</div></div>
+          <div class="v"><b>${plural(ks.length, 'processo', 'processos')}</b><div class="small muted">${brl(sum(ks, k => k.valor_total))}</div></div></div>`;
+      }).join('')}</div></div>`;
+  }).join('');
+  return `<div class="toolbar"><p class="muted" style="flex:1">Os serviços que você oferece. Eles aparecem na hora de cadastrar um processo.</p>
+    <button class="btn btn-ghost" type="button" data-action="new" data-what="produto">${ic('plus')}Novo serviço</button></div>
+    <section class="panel">${blocks || '<p class="empty">Nenhum serviço cadastrado.</p>'}</section>`;
+}
+function formProduto(id) {
+  const p = id ? byId('produtos', id) : { ativo: true, area: (S.config.areas || [])[0] };
+  openDrawer(() => ({
+    title: id ? 'Editar serviço' : 'Novo serviço',
+    body: `<form class="form" id="fm" autocomplete="off">
+      ${field('nome', 'Nome do serviço', 'text', p.nome, { full: true, required: true, autofocus: true, placeholder: 'Ex.: Inventário extrajudicial' })}
+      ${field('area', 'Área', 'select', p.area, { options: optList('areas') })}
+      ${field('valor_referencia', 'Valor de referência', 'money', p.valor_referencia, { hint: 'Preenche o contrato automaticamente.' })}
+      <div class="field full"><label>Está oferecendo hoje?</label>${seg('ativo', p.ativo === false ? 'false' : 'true', [['true', 'Sim, em oferta'], ['false', 'Não, fora de oferta']])}</div>
+    </form>`,
+    foot: `${id ? `<button class="btn btn-danger" type="button" data-action="del" data-what="produto" data-id="${id}">Excluir</button>` : ''}<span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-action="close">Cancelar</button>
+      <button class="btn btn-primary" type="button" data-action="submit-produto" data-id="${id || ''}">${id ? 'Salvar alterações' : 'Cadastrar serviço'}</button>`
+  }));
+}
+function submitProduto(id) {
+  const fm = $('#fm'), v = readForm(fm);
+  if (!v.nome) return invalid(fm.nome, 'Informe o nome do serviço.');
+  v.ativo = v.ativo !== 'false';
+  save('produtos', Object.assign({}, id ? byId('produtos', id) : { id: uid() }, v));
+  toast(id ? 'Serviço atualizado.' : 'Serviço cadastrado.');
+  closeDrawer();
+}
+
+/* =========================================================================
+   AJUSTES
+   ========================================================================= */
+const LISTAS = [
+  ['categorias_gasto', 'Categorias de gasto', 'Usadas ao lançar um gasto.'],
+  ['origens', 'Como os clientes chegam', 'Usadas no cadastro do cliente.'],
+  ['areas', 'Áreas de atuação', 'Agrupam os produtos e serviços.'],
+  ['plataformas', 'Plataformas de anúncio', 'Usadas nas campanhas.']
+];
+/** Onde cada lista é usada: renomear um item atualiza esses registros. */
+const LIST_USO = { areas: ['produtos', 'area'], categorias_gasto: ['gastos', 'categoria'], plataformas: ['campanhas', 'plataforma'], origens: ['clientes', 'origem'] };
+const RENAME_HINT = {
+  areas: 'Todos os serviços desta área passam a usar o nome novo.',
+  categorias_gasto: 'Todos os gastos desta categoria passam a usar o nome novo.',
+  plataformas: 'Todas as campanhas desta plataforma passam a usar o nome novo.',
+  origens: 'Todos os clientes com esta origem passam a usar o nome novo.'
+};
+function renameItem(k, i, novo) {
+  const arr = (S.config[k] || []).slice();
+  const antigo = arr[i];
+  if (!novo || novo === antigo) { S.renaming = null; rerender(); return; }
+  arr[i] = novo;
+  S.renaming = null;
+  saveConfig(k, arr);
+  const [t, f] = LIST_USO[k];
+  const afetados = T(t).filter(r => r[f] === antigo);
+  afetados.forEach(r => save(t, Object.assign({}, r, { [f]: novo })));
+  toast(`Renomeado para "${novo}"${afetados.length ? `, ${plural(afetados.length, 'registro atualizado', 'registros atualizados')}` : ''}.`);
+}
+function vAjustes() {
+  return `<div class="grid g2">${LISTAS.map(([k, t, d]) => `<section class="panel">
+      <div class="panel-head"><div><h3>${t}</h3><p>${d}</p></div></div>
+      <div class="tags">${(S.config[k] || []).map((x, i) => `<span class="tag">${esc(x)}<button type="button" data-action="list-rename" data-k="${k}" data-i="${i}" aria-label="Renomear ${esc(x)}" title="Renomear">${ic('edit')}</button><button type="button" data-action="list-del" data-k="${k}" data-i="${i}" aria-label="Remover ${esc(x)}" title="Remover">${ic('x')}</button></span>`).join('')}</div>
+      ${S.renaming && S.renaming.k === k
+        ? `<form class="row" style="margin-top:14px" data-list-rename="${k}"><input class="search" style="min-width:0" value="${esc(S.config[k][S.renaming.i])}" aria-label="Novo nome"><button class="btn btn-primary btn-sm" type="submit">Renomear</button><button class="btn btn-text btn-sm" type="button" data-action="list-rename-cancel">Cancelar</button></form>
+           <p class="small muted" style="margin-top:6px">${RENAME_HINT[k]}</p>`
+        : `<form class="row" style="margin-top:14px" data-list-add="${k}"><input class="search" style="min-width:0" placeholder="Adicionar" aria-label="Adicionar em ${t}"><button class="btn btn-ghost btn-sm" type="submit">Adicionar</button></form>`}
+    </section>`).join('')}
+    <section class="panel">
+      <div class="panel-head"><div><h3>Google Drive e dados</h3><p>Onde ficam as pastas dos clientes e a planilha com os dados do painel.</p></div></div>
+      <div class="row wrap">
+        ${S.meta.driveRootUrl ? `<a class="btn btn-ghost" href="${esc(S.meta.driveRootUrl)}" target="_blank" rel="noopener">${ic('drive')}Pasta dos clientes</a>` : ''}
+        ${S.meta.planilhaUrl ? `<a class="btn btn-ghost" href="${esc(S.meta.planilhaUrl)}" target="_blank" rel="noopener">${ic('file')}Planilha de dados</a>` : ''}
+      </div>
+      <form class="field" style="margin-top:18px" data-root-form>
+        <label for="root-url">Usar outra pasta-mãe para clientes novos</label>
+        <div class="row"><input id="root-url" class="search" style="min-width:0" placeholder="Cole o link da pasta do Drive"><button class="btn btn-ghost btn-sm" type="submit">Trocar</button></div>
+        <span class="hint">As pastas de clientes já cadastrados continuam onde estão.</span>
+      </form>
+    </section></div>`;
+}
+
+/* =========================================================================
+   MENU "ADICIONAR" E "MAIS"
+   ========================================================================= */
+function menuNovo() {
+  const op = [
+    ['contrato', 'file', 'Processo', 'Contrato fechado: cliente, serviço, honorários e parcelas'],
+    ['cliente', 'users', 'Cliente', 'Também cria a pasta no Drive'],
+    ['gasto', 'wallet', 'Gasto', 'Mentoria, curso, software, anúncio'],
+    ['campanha', 'mega', 'Campanha', 'Meta Ads ou Google Ads'],
+    ['produto', 'tag', 'Serviço', 'Algo novo que você passou a oferecer']
+  ];
+  openDrawer(() => ({
+    title: 'Adicionar',
+    body: `<div class="list">${op.map(([w, i, t, s]) => `<button class="item" type="button" data-action="new" data-what="${w}">
+      <span class="avatar">${ic(i).replace('<svg ', '<svg style="width:20px;height:20px" ')}</span>
+      <span class="grow"><span class="t" style="display:block">${t}</span><span class="s">${s}</span></span></button>`).join('')}</div>`
+  }));
+}
+function menuMais() {
+  openDrawer(() => ({
+    title: 'Mais',
+    body: `<div class="list">${ROUTES.filter(r => TABS.indexOf(r.id) < 0).map(r => `<button class="item" type="button" data-action="go" data-route="${r.id}">
+      <span class="avatar">${ic(r.icon).replace('<svg ', '<svg style="width:20px;height:20px" ')}</span><span class="grow"><span class="t" style="display:block">${r.label}</span></span></button>`).join('')}</div>`
+  }));
+}
+
+/* =========================================================================
+   EVENTOS
+   ========================================================================= */
+const NEW = { contrato: (el) => formContrato(null, el.dataset.cliente), cliente: () => formCliente(), gasto: () => formGasto(), campanha: () => formCampanha(), produto: () => formProduto() };
+const EDIT = { contrato: id => formContrato(id), cliente: id => formCliente(id), gasto: id => formGasto(id), campanha: id => formCampanha(id), produto: id => formProduto(id) };
+const TABLE = { contrato: 'contratos', cliente: 'clientes', gasto: 'gastos', campanha: 'campanhas', produto: 'produtos' };
+const DEL_TXT = {
+  cliente: id => `Excluir ${esc(clienteNome(id))} e ${plural(contratosDe(id).length, 'processo', 'processos')}? As pastas no Drive são mantidas.`,
+  contrato: () => 'Excluir este processo e as parcelas dele? A pasta no Drive é mantida.',
+  gasto: () => 'Excluir este gasto?',
+  campanha: () => 'Excluir esta campanha? Gastos e processos ligados a ela ficam sem campanha.',
+  produto: id => T('contratos').some(k => k.produto_id === id) ? 'Há processos com este serviço. Prefira marcar como fora de oferta. Excluir mesmo assim?' : 'Excluir este serviço?'
+};
+
+const ACTIONS = {
+  'go': el => go(el.dataset.route),
+  'more': () => menuMais(),
+  'close': () => closeDrawer(),
+  'new-menu': () => menuNovo(),
+  'new': el => NEW[el.dataset.what](el),
+  'edit': el => EDIT[el.dataset.what](el.dataset.id),
+  'open-cliente': el => openCliente(el.dataset.id),
+  'open-processo': el => openProcesso(el.dataset.id),
+  'periodo': el => { S.periodo = el.dataset.v; rerender(); },
+  'cli-status': el => { S.clienteStatus = el.dataset.v; rerender(); },
+  'rec-modo': el => { S.rec.modo = el.dataset.v; rerender(); },
+  'rec-month': el => { S.rec.mes = el.dataset.key; if (el.dataset.key) S.rec.modo = 'pendentes'; go('recebiveis'); },
+  'gasto-cat': el => { S.gasto.cat = el.dataset.v; rerender(); },
+  'gasto-periodo': el => { S.gasto.periodo = el.dataset.v; rerender(); },
+  'toggle-paga': el => togglePaga(el.dataset.id),
+  'seg': el => {
+    el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === el)));
+    if (el.dataset.name === 'forma_pagamento' && S.form) { S.form.forma = el.dataset.value; showForma(); }
+  },
+  'gerar': () => gerarParcelas(),
+  'parc-add': () => {
+    const last = S.form.parcelas[S.form.parcelas.length - 1];
+    S.form.parcelas.push({ id: uid(), contrato_id: S.form.id, numero: 0, valor: null, vencimento: last && last.vencimento ? addMonths(last.vencimento, 1) : addMonths(today(), 1), tipo: S.form.forma === 'evento' ? 'estimada' : 'fixa', condicao: '', status: 'pendente', data_pagamento: '' });
+    renumber(); paintParcelas();
+  },
+  'parc-del': el => { S.form.parcelas.splice(+el.dataset.i, 1); renumber(); paintParcelas(); },
+  'submit-cliente': el => submitCliente(el.dataset.id),
+  'submit-contrato': el => submitContrato(el.dataset.id),
+  'submit-gasto': el => submitGasto(el.dataset.id),
+  'submit-campanha': el => submitCampanha(el.dataset.id),
+  'submit-produto': el => submitProduto(el.dataset.id),
+  'del': el => {
+    const w = el.dataset.what, id = el.dataset.id;
+    askDelete(DEL_TXT[w](id), () => {
+      const clienteDoContrato = w === 'contrato' ? (byId('contratos', id) || {}).cliente_id : '';
+      remove(TABLE[w], id);
+      toast('Excluído.');
+      closeDrawer();
+      if (clienteDoContrato) openCliente(clienteDoContrato);
+      else if (w === 'cliente') go('clientes');
+    });
+  },
+  'files-refresh': el => loadFiles(el.dataset.kind, el.dataset.id, true),
+  'link-folder': el => linkFolder(el.dataset.kind, el.dataset.id),
+  'agrupar': el => { S.gasto.agrupar = el.dataset.v; rerender(); },
+  'list-rename': el => { S.renaming = { k: el.dataset.k, i: +el.dataset.i }; rerender(); const inp = $('[data-list-rename] input'); if (inp) { inp.focus(); inp.select(); } },
+  'list-rename-cancel': () => { S.renaming = null; rerender(); },
+  'list-del': el => {
+    const k = el.dataset.k, arr = (S.config[k] || []).slice();
+    arr.splice(+el.dataset.i, 1);
+    saveConfig(k, arr);
+  }
+};
+function saveConfig(k, arr) {
+  S.config[k] = arr; rerender();
+  track(call('api_saveConfig', k, arr));
+}
+
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-stop]')) return;
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const fn = ACTIONS[el.dataset.action];
+  if (fn) { e.preventDefault(); fn(el); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && S.drawer) closeDrawer();
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"][data-action]')) { e.preventDefault(); e.target.click(); }
+  if (e.key === 'Enter' && e.target.matches('#fm input') && !e.target.closest('.parc-table')) {
+    const btn = $('#drawer [data-action^="submit-"]');
+    if (btn) { e.preventDefault(); btn.click(); }
+  }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.input === 'q') {
+    S.q = t.value;
+    const pos = t.selectionStart;
+    rerender();
+    const n = $('[data-input="q"]'); n.focus(); n.setSelectionRange(pos, pos);
+  }
+  if (t.dataset.pi !== undefined && S.form) {
+    const p = S.form.parcelas[+t.dataset.pi];
+    p[t.dataset.pf] = t.dataset.pf === 'valor' ? parseMoney(t.value) : t.value;
+  }
+  if (t.name === 'valor_total' && S.form) paintParcelas();
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.pi !== undefined && S.form) {
+    if (t.dataset.pf === 'valor') t.value = moneyIn(parseMoney(t.value));
+    if (t.dataset.pf === 'vencimento') renumber();
+    paintParcelas();
+  }
+  if (t.hasAttribute('data-money') && t.value) t.value = moneyIn(parseMoney(t.value));
+  if (t.dataset.upload) { uploadFiles(t.dataset.kind, t.dataset.upload, Array.from(t.files)); t.value = ''; }
+});
+document.addEventListener('submit', e => {
+  const f = e.target;
+  if (f.dataset.listAdd) {
+    e.preventDefault();
+    const v = f.querySelector('input').value.trim();
+    if (!v) return;
+    const k = f.dataset.listAdd, arr = (S.config[k] || []).slice();
+    if (arr.indexOf(v) < 0) arr.push(v);
+    saveConfig(k, arr);
+  }
+  if (f.dataset.listRename) {
+    e.preventDefault();
+    renameItem(f.dataset.listRename, S.renaming.i, f.querySelector('input').value.trim());
+  }
+  if (f.hasAttribute('data-root-form')) {
+    e.preventDefault();
+    const v = $('#root-url').value.trim();
+    if (!v) return;
+    call('api_setDriveRoot', v).then(url => { S.meta.driveRootUrl = url; rerender(); toast('Pasta-mãe trocada.'); })
+      .catch(err => toast(err.message, true));
+  }
+  if (f.id === 'fm') e.preventDefault();
+});
+
+// ------------------------------------------------------------------ início ---
+document.querySelectorAll('[data-logo]').forEach(el => { el.innerHTML = LOGO; });
+call('api_bootstrap').then(d => {
+  S.tables = d.tables; S.config = d.config; S.meta = d.meta; S.ready = true;
+  rerender();
+}).catch(err => {
+  $('#view').innerHTML = `<div class="panel empty"><h3>Não consegui abrir o painel</h3><p>${esc(err.message)}</p>
+    <button class="btn btn-primary" type="button" onclick="location.reload()">Tentar de novo</button></div>`;
+});
+})();
+</script>
