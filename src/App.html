@@ -1233,7 +1233,7 @@ function paintParcelas() {
       <td class="num">${p.numero}</td>
       <td><input type="date" value="${esc(p.vencimento)}" data-pi="${i}" data-pf="vencimento" ${p.status === 'paga' ? 'disabled' : ''}></td>
       <td><input inputmode="decimal" value="${esc(moneyIn(p.valor))}" data-pi="${i}" data-pf="valor" placeholder="Valor" ${p.status === 'paga' ? 'disabled' : ''}></td>
-      <td>${p.status === 'paga' ? '<span class="badge b-ok">Recebida</span>' : `<input value="${esc(p.condicao)}" data-pi="${i}" data-pf="condicao" placeholder="${p.tipo === 'estimada' ? 'Paga quando' : 'Observação'}">`}</td>
+      <td>${p.status === 'paga' ? `<label class="paid-in"><span class="badge b-ok">Recebida em</span><input type="date" value="${esc(p.data_pagamento)}" data-pi="${i}" data-pf="data_pagamento" aria-label="Data em que recebeu a parcela ${p.numero}"></label>` : `<input value="${esc(p.condicao)}" data-pi="${i}" data-pf="condicao" placeholder="${p.tipo === 'estimada' ? 'Paga quando' : 'Observação'}">`}</td>
       <td>${p.status === 'paga' ? '' : `<button class="icon-btn" type="button" style="width:30px;height:30px" data-action="parc-del" data-i="${i}" aria-label="Remover parcela">${ic('x')}</button>`}</td>
     </tr>`).join('')}</tbody></table>
     <div class="row spread"><button class="btn btn-text btn-sm" type="button" data-action="parc-add">${ic('plus')}Adicionar parcela</button>
@@ -1354,12 +1354,54 @@ function submitReceita(id) {
   // Mostra o lançamento recém-feito na lista em que ele aparece.
   if (S.route === 'recebiveis' && !id) { S.rec.modo = paga ? 'pagas' : 'pendentes'; S.rec.mes = ''; rerender(); }
 }
+/** Registrar (ou corrigir) o recebimento de uma parcela, escolhendo a data em que o dinheiro entrou. */
 function togglePaga(id) {
+  const p0 = byId('parcelas', id);
+  if (!p0) return;
+  openDrawer(() => {
+    const p = byId('parcelas', id) || p0;
+    const paga = p.status === 'paga';
+    const k = p.contrato_id ? byId('contratos', p.contrato_id) : null;
+    const nome = k ? clienteNome(k.cliente_id) : (p.cliente_id ? clienteNome(p.cliente_id) : (p.pessoa || 'Recebimento avulso'));
+    const total = k ? parcelasDe(k.id).length : 1;
+    const desc = k ? [produtoNome(k.produto_id), total > 1 ? `parcela ${p.numero} de ${total}` : ''].filter(Boolean).join(', ') : [p.categoria, p.descricao].filter(Boolean).join(', ');
+    const t = today();
+    // Sugestão: parcela vencida → data do vencimento (lançamento de algo pago antes); senão, hoje.
+    const sugest = paga ? (p.data_pagamento || p.vencimento || t) : (p.vencimento && p.vencimento < t ? p.vencimento : t);
+    return {
+      title: paga ? 'Recebimento' : 'Registrar recebimento',
+      sub: `${esc(nome)}${desc ? ', ' + esc(desc) : ''}`,
+      body: `<div class="box" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+          <span class="muted small">${p.vencimento ? 'Vencimento ' + fmtDate(p.vencimento) : 'Sem vencimento'}</span><b class="num" style="font-size:1.2rem">${brl(p.valor)}</b></div>
+        <form class="form" id="fm" autocomplete="off">
+          <div class="field full"><label for="f-data_pagamento">Data em que recebeu</label>
+            <input id="f-data_pagamento" name="data_pagamento" type="date" value="${esc(sugest)}" autofocus>
+            <div class="row wrap" style="gap:6px;margin-top:6px">
+              ${p.vencimento ? `<button class="chip" type="button" data-action="set-date" data-v="${p.vencimento}">No vencimento (${fmtDate(p.vencimento)})</button>` : ''}
+              <button class="chip" type="button" data-action="set-date" data-v="${t}">Hoje (${fmtDate(t)})</button>
+            </div>
+          </div>
+        </form>`,
+      foot: `${paga ? `<button class="btn btn-danger" type="button" data-action="unpay" data-id="${id}">Desmarcar recebimento</button>` : ''}<span class="spacer"></span>
+        <button class="btn btn-ghost" type="button" data-action="close">Cancelar</button>
+        <button class="btn btn-primary" type="button" data-action="submit-pay" data-id="${id}">${paga ? 'Salvar data' : 'Confirmar recebimento'}</button>`
+    };
+  });
+}
+function submitPay(id) {
   const p = byId('parcelas', id);
-  if (!p) return;
-  const paga = p.status === 'paga';
-  save('parcelas', Object.assign({}, p, { status: paga ? 'pendente' : 'paga', data_pagamento: paga ? '' : today() }));
-  toast(paga ? 'Recebimento desmarcado.' : `Recebida: ${brl(p.valor)}.`);
+  const d = $('#f-data_pagamento').value;
+  if (!d) return invalid($('#f-data_pagamento'), 'Informe a data em que recebeu.');
+  const era = p.status === 'paga';
+  save('parcelas', Object.assign({}, p, { status: 'paga', data_pagamento: d }));
+  toast(era ? `Data do recebimento: ${fmtDate(d)}.` : `Recebida em ${fmtDate(d)}: ${brl(p.valor)}.`);
+  closeDrawer();
+}
+function unpay(id) {
+  const p = byId('parcelas', id);
+  save('parcelas', Object.assign({}, p, { status: 'pendente', data_pagamento: '' }));
+  toast('Recebimento desmarcado.');
+  closeDrawer();
 }
 
 /* =========================================================================
@@ -1643,6 +1685,9 @@ const ACTIONS = {
   'gasto-cat': el => { S.gasto.cat = el.dataset.v; rerender(); },
   'gasto-periodo': el => { S.gasto.periodo = el.dataset.v; rerender(); },
   'toggle-paga': el => togglePaga(el.dataset.id),
+  'set-date': el => { const f = $('#f-data_pagamento'); if (f) f.value = el.dataset.v; },
+  'submit-pay': el => submitPay(el.dataset.id),
+  'unpay': el => unpay(el.dataset.id),
   'seg': el => {
     el.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === el)));
     if (el.dataset.name === 'forma_pagamento' && S.form) { S.form.forma = el.dataset.value; showForma(); }

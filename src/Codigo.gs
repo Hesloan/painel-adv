@@ -10,7 +10,7 @@
  * Instalação: veja o guia INSTALACAO.md.
  */
 
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.3.2';
 
 const DEFAULT_CONFIG = {
   categorias_gasto: ['Anúncios', 'Mentoria', 'Curso', 'Software / assinatura', 'Projeto / freelancer', 'Material / escritório', 'Impostos e taxas', 'Outro'],
